@@ -5,7 +5,7 @@ import Link from "next/link";
 import ProgressIndicator from "@/components/ProgressIndicator";
 import IDUpload from "@/components/IDUpload";
 import Camera from "@/components/Camera";
-import { extractIDData, IDData, isConfidenceAcceptable } from "@/lib/ocr";
+import { extractIDData, IDData } from "@/lib/ocr";
 import { validateIDData, ValidationResult } from "@/lib/validation";
 
 type Step = "upload" | "processing" | "validation" | "selfie" | "matching" | "success" | "error";
@@ -124,10 +124,11 @@ export default function VerifyPage() {
                     )}
 
                     {/* Step: Validation */}
-                    {currentStep === "validation" && validationResult && idData && (
+                    {currentStep === "validation" && validationResult && idData && idImage && (
                         <ValidationView
                             data={idData}
                             result={validationResult}
+                            idImage={idImage}
                             onProceed={handleValidationProceed}
                             onRetry={handleRetry}
                         />
@@ -205,11 +206,13 @@ function ProcessingView({ progress, status }: { progress: number; status: string
 function ValidationView({
     data,
     result,
+    idImage,
     onProceed,
     onRetry,
 }: {
     data: IDData;
     result: ValidationResult;
+    idImage: string;
     onProceed: () => void;
     onRetry: () => void;
 }) {
@@ -245,17 +248,41 @@ function ValidationView({
                 </div>
             </div>
 
+            {/* ID Photo Preview */}
+            <div className="glass-card p-4 mb-6">
+                <h4 className="text-sm font-semibold text-white mb-3">ID Photo</h4>
+                <div className="relative aspect-[3/2] rounded-lg overflow-hidden bg-black/30">
+                    <img
+                        src={idImage}
+                        alt="Uploaded ID"
+                        className="w-full h-full object-contain"
+                    />
+                </div>
+            </div>
+
             {/* Extracted data */}
             <div className="glass-card p-6 mb-6">
                 <h4 className="text-lg font-semibold text-white mb-4">Extracted Information</h4>
                 <div className="space-y-3">
-                    <DataRow label="OCR Confidence" value={`${Math.round(data.confidence)}%`} status={isConfidenceAcceptable(data.confidence) ? "success" : "error"} />
-                    <DataRow label="Name Detected" value={data.name || "Not detected"} status={data.name ? "success" : "warning"} />
-                    <DataRow label="Birth Year" value={data.birthYear?.toString() || "Not detected"} status={data.birthYear ? "success" : "warning"} />
+                    <DataRow label="OCR Confidence" value={`${Math.round(data.confidence)}%`} status={data.confidence >= 20 ? "success" : "warning"} />
+                    <DataRow label="Birth Year" value={data.birthYear?.toString() || "Not detected"} status={data.birthYear ? "success" : "error"} />
                     <DataRow label="Calculated Age" value={result.age ? `${result.age} years` : "—"} status={result.isOver19 ? "success" : "error"} />
                     <DataRow label="Age Requirement" value={result.isOver19 ? "Met (19+)" : "Not met"} status={result.isOver19 ? "success" : "error"} />
+                    <DataRow
+                        label="Expiry Date"
+                        value={result.expiryDate || "Not detected"}
+                        status={result.expiryDate ? (result.isExpired ? "error" : "success") : "warning"}
+                    />
+                    {result.expiryDate && (
+                        <DataRow
+                            label="ID Status"
+                            value={result.isExpired ? "⛔ Expired" : "✓ Valid"}
+                            status={result.isExpired ? "error" : "success"}
+                        />
+                    )}
                 </div>
             </div>
+
 
             {/* Raw OCR text (expandable for debugging) */}
             <div className="glass-card p-4 mb-6">

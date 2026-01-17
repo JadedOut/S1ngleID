@@ -4,6 +4,8 @@ export interface ValidationResult {
     isValid: boolean;
     age: number | null;
     isOver19: boolean;
+    isExpired: boolean;
+    expiryDate: string | null;
     errors: ValidationError[];
     warnings: ValidationWarning[];
 }
@@ -31,11 +33,12 @@ export function validateIDData(data: IDData): ValidationResult {
     let age: number | null = null;
     let isOver19 = false;
 
-    // Check OCR confidence (>40% - lowered for real-world photos)
-    if (data.confidence < 40) {
-        errors.push({
+    // OCR confidence is now just a warning, not an error
+    // The key metric is whether we can extract the birth year
+    if (data.confidence < 20) {
+        warnings.push({
             code: "LOW_CONFIDENCE",
-            message: `OCR confidence is too low (${Math.round(data.confidence)}%). Please retake the photo with better lighting.`,
+            message: `OCR confidence is low (${Math.round(data.confidence)}%), but verification can proceed if birth year was detected.`,
         });
     }
 
@@ -71,14 +74,7 @@ export function validateIDData(data: IDData): ValidationResult {
         }
     }
 
-    // Optional validations (warnings, not errors)
-    if (!data.name) {
-        warnings.push({
-            code: "NO_NAME",
-            message: "Name could not be extracted. Verification can still proceed.",
-        });
-    }
-
+    // ID number is optional - just for information
     if (!data.idNumber) {
         warnings.push({
             code: "NO_ID_NUMBER",
@@ -86,12 +82,36 @@ export function validateIDData(data: IDData): ValidationResult {
         });
     }
 
-    const isValid = errors.length === 0 && data.confidence >= 40 && isOver19;
+    // Check expiry date
+    let isExpired = false;
+    if (data.expiryDate) {
+        const expiry = new Date(data.expiryDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Compare dates only
+
+        if (expiry < today) {
+            isExpired = true;
+            errors.push({
+                code: "ID_EXPIRED",
+                message: `This ID has expired (${data.expiryDate}). Please use a valid, non-expired ID.`,
+            });
+        }
+    } else {
+        warnings.push({
+            code: "NO_EXPIRY_DATE",
+            message: "Could not detect expiry date. Please ensure your ID is not expired.",
+        });
+    }
+
+    // Valid if we have a valid birth year showing age >= 19 AND ID is not expired
+    const isValid = errors.length === 0 && isOver19 && !isExpired;
 
     return {
         isValid,
         age,
         isOver19,
+        isExpired,
+        expiryDate: data.expiryDate,
         errors,
         warnings,
     };

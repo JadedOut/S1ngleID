@@ -4,6 +4,7 @@ export interface IDData {
     name: string | null;
     idNumber: string | null;
     birthYear: number | null;
+    expiryDate: string | null; // Format: YYYY-MM-DD or YYYY/MM/DD
     rawText: string;
     confidence: number;
 }
@@ -28,10 +29,10 @@ async function getWorker(): Promise<Worker> {
             },
         });
 
-        // Set parameters for better ID card/document recognition
+        // Set parameters for ID card/document recognition
+        // Using SINGLE_BLOCK mode to ensure entire document is captured
         await worker.setParameters({
-            tessedit_pageseg_mode: PSM.AUTO, // Automatic page segmentation
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-., ',
+            tessedit_pageseg_mode: PSM.SINGLE_BLOCK, // Treat as single block - captures all text
             preserve_interword_spaces: '1',
         });
 
@@ -114,6 +115,7 @@ async function preprocessImage(imageData: string): Promise<string> {
 /**
  * Extract ID data from an image using Tesseract OCR
  * All processing happens client-side - data never leaves the browser
+ * Runs OCR on both preprocessed and original images to maximize text capture
  */
 export async function extractIDData(
     imageData: string,
@@ -123,7 +125,13 @@ export async function extractIDData(
         onProgress?.(0, "Initializing OCR engine...");
         console.log("Starting OCR extraction...");
 
-        // Get or create worker
+        // Reset worker to apply any new settings
+        if (worker) {
+            await worker.terminate();
+            worker = null;
+        }
+
+        // Get fresh worker
         const tesseractWorker = await getWorker();
 
         onProgress?.(10, "Preprocessing image...");
@@ -132,25 +140,64 @@ export async function extractIDData(
         const processedImage = await preprocessImage(imageData);
         console.log("Image preprocessed");
 
-        onProgress?.(20, "Analyzing document...");
+        onProgress?.(20, "Analyzing document (pass 1)...");
 
-        // Run OCR with timeout protection
-        const result = await Promise.race([
+        // Run OCR on preprocessed image first
+        const result1 = await Promise.race([
             tesseractWorker.recognize(processedImage),
             new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error("OCR timeout - image may be too complex")), 60000)
             )
         ]);
 
-        onProgress?.(80, "Extracting data...");
+        let text = result1.data.text;
+        let confidence = result1.data.confidence;
 
-        const text = result.data.text;
-        const confidence = result.data.confidence;
-
-        console.log("OCR Result:", {
+        console.log("OCR Pass 1 (preprocessed):", {
             textLength: text.length,
             confidence: Math.round(confidence),
-            textPreview: text.substring(0, 200)
+            textPreview: text.substring(0, 300)
+        });
+
+        onProgress?.(50, "Analyzing document (pass 2)...");
+
+        // Run OCR on ORIGINAL image too - sometimes preprocessing removes important details
+        try {
+            const result2 = await Promise.race([
+                tesseractWorker.recognize(imageData),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error("OCR timeout")), 60000)
+                )
+            ]);
+
+            console.log("OCR Pass 2 (original):", {
+                textLength: result2.data.text.length,
+                confidence: Math.round(result2.data.confidence),
+                textPreview: result2.data.text.substring(0, 300)
+            });
+
+            // If original image gave better/longer results, use it or combine
+            if (result2.data.text.length > text.length) {
+                console.log("Using original image results (more text captured)");
+                text = result2.data.text;
+                confidence = result2.data.confidence;
+            } else if (result2.data.text.length > text.length * 0.8) {
+                // Combine texts if they're similar in length - might have different captured sections
+                const combinedText = text + "\n---PASS2---\n" + result2.data.text;
+                console.log("Combining results from both passes");
+                text = combinedText;
+                confidence = Math.max(confidence, result2.data.confidence);
+            }
+        } catch (e) {
+            console.warn("Second OCR pass failed, using first pass only:", e);
+        }
+
+        onProgress?.(80, "Extracting data...");
+
+        console.log("Final OCR Result:", {
+            textLength: text.length,
+            confidence: Math.round(confidence),
+            fullText: text
         });
 
         // Parse the extracted text
@@ -213,7 +260,10 @@ function parseIDText(text: string): Omit<IDData, "rawText" | "confidence"> {
     // Extract birth year (look for DOB patterns or 4-digit years between 1900-2007)
     const birthYear = extractBirthYear(cleanText);
 
-    return { name, idNumber, birthYear };
+    // Extract expiry date
+    const expiryDate = extractExpiryDate(cleanText);
+
+    return { name, idNumber, birthYear, expiryDate };
 }
 
 /**
@@ -279,95 +329,176 @@ function extractIDNumber(text: string): string | null {
 }
 
 /**
- * Extract birth year from text
+ * Extract expiry date from ID text
+ * Looks for dates near EXP, EXPIRY, EXPIRES, DEL labels
  */
-function extractBirthYear(text: string): number | null {
-    // Look for DOB patterns first (various date formats)
-    const dobPatterns = [
-        // Common DOB labels
-        /(?:DOB|DATE\s*OF\s*BIRTH|BIRTH|BORN|BD|BIRTHDATE)[:\s]*([\d\/\-\.]+)/i,
-        // DD/MM/YYYY or MM/DD/YYYY
-        /(?:DOB|BIRTH)[:\s]*(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/i,
-        // YYYY/MM/DD (ISO format)
-        /(?:DOB|BIRTH)[:\s]*(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/i,
-        // DD MMM YYYY (e.g., 15 JAN 1990)
-        /(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\s+(\d{4})/i,
-        // Stand-alone date patterns
-        /(\d{1,2})[\/-](\d{1,2})[\/-](19\d{2}|20[0-2]\d)/,
-        /(19\d{2}|20[0-2]\d)[\/-](\d{1,2})[\/-](\d{1,2})/,
+function extractExpiryDate(text: string): string | null {
+    // Patterns to find expiry dates - look for date after EXP/EXPIRY/DEL
+    const expiryPatterns = [
+        // EXP followed by date: EXP 2026/01/23, EXP: 2026-01-23
+        /(?:EXP|EXPIRY|EXPIRES|EXPIR)[.:\s]*(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/i,
+        // Canadian format: EXP 2026/01/23
+        /(?:EXP)[.:\s]*(\d{4})[\/\-](\d{2})[\/\-](\d{2})/i,
+        // DD/MM/YYYY or MM/DD/YYYY after EXP
+        /(?:EXP|EXPIRY|EXPIRES)[.:\s]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i,
+        // Just looking for 4b EXP pattern from Canadian license
+        /4b\s*EXP[^\d]*(\d{4})[\/\-](\d{2})[\/\-](\d{2})/i,
     ];
 
-    for (const pattern of dobPatterns) {
+    for (const pattern of expiryPatterns) {
         const match = text.match(pattern);
         if (match) {
-            console.log("DOB pattern match:", match);
+            let year: string, month: string, day: string;
 
-            // Find the 4-digit year in the match groups
-            for (let i = 1; i < match.length; i++) {
-                const val = match[i];
-                if (!val) continue;
-
-                // Check for 4-digit year
-                if (/^\d{4}$/.test(val)) {
-                    const year = parseInt(val, 10);
-                    if (year >= 1900 && year <= 2025) {
-                        return year;
-                    }
-                }
-
-                // Check for 2-digit year
-                if (/^\d{2}$/.test(val) && parseInt(val, 10) <= 31) {
-                    continue; // Likely a day, not year
-                }
-                if (/^\d{2}$/.test(val)) {
-                    const yearNum = parseInt(val, 10);
-                    const year = yearNum > 30 ? 1900 + yearNum : 2000 + yearNum;
-                    if (year >= 1900 && year <= 2007) {
-                        return year;
-                    }
-                }
+            // Determine if YYYY-MM-DD or DD-MM-YYYY format
+            if (match[1].length === 4) {
+                // YYYY-MM-DD format
+                year = match[1];
+                month = match[2].padStart(2, '0');
+                day = match[3].padStart(2, '0');
+            } else if (match[3].length === 4) {
+                // DD-MM-YYYY or MM-DD-YYYY format
+                year = match[3];
+                // Assume DD/MM/YYYY for non-US
+                day = match[1].padStart(2, '0');
+                month = match[2].padStart(2, '0');
+            } else {
+                continue;
             }
 
-            // Try to parse date string directly
-            if (match[1] && /\d/.test(match[1])) {
-                const dateStr = match[1];
-                const yearMatch = dateStr.match(/(19\d{2}|20[0-2]\d)/);
-                if (yearMatch) {
-                    return parseInt(yearMatch[1], 10);
-                }
-            }
+            const expiryDate = `${year}-${month}-${day}`;
+            console.log("Found expiry date:", expiryDate);
+            return expiryDate;
         }
     }
 
-    // Fallback: look for any 4-digit year between 1920-2007
-    // Exclude years that are likely issue/expiry dates (future or very recent years)
+    // Fallback: look for any date near EXP text
+    const expIndex = text.toUpperCase().indexOf('EXP');
+    if (expIndex !== -1) {
+        const nearbyText = text.substring(expIndex, Math.min(text.length, expIndex + 30));
+        const dateMatch = nearbyText.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        if (dateMatch) {
+            const expiryDate = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
+            console.log("Found expiry date (fallback):", expiryDate);
+            return expiryDate;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Extract birth year from text
+ * Specifically handles Canadian driver's licenses where DOB is at bottom
+ * and avoids picking up ISS (issue) or EXP (expiry) dates
+ */
+function extractBirthYear(text: string): number | null {
     const currentYear = new Date().getFullYear();
-    const yearMatches = text.match(/\b(19[2-9]\d|200[0-7])\b/g);
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-    if (yearMatches) {
-        // Filter out likely expiry dates (often future dates)
-        const birthYears = yearMatches.filter(y => {
-            const year = parseInt(y, 10);
-            // Birth years should be at least 19 years ago
-            return year <= currentYear - 19;
-        });
+    console.log("Extracting birth year from text, lines:", lines);
 
-        if (birthYears.length > 0) {
-            // Prefer years that appear near DOB-related text
-            for (const yearStr of birthYears) {
-                const idx = text.indexOf(yearStr);
-                const context = text.substring(Math.max(0, idx - 30), idx + 10);
-                if (/DOB|BIRTH|BORN|DATE/i.test(context)) {
-                    return parseInt(yearStr, 10);
-                }
+    // First, find all dates in the text with their context
+    const dateContexts: Array<{ year: number; context: string; isDOB: boolean; isIssueExpiry: boolean }> = [];
+
+    // Pattern to find dates: YYYY-MM-DD, DD-MM-YYYY, MM-DD-YYYY, DD/MM/YYYY, etc.
+    const dateRegex = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})|(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/g;
+
+    let match;
+    while ((match = dateRegex.exec(text)) !== null) {
+        const fullMatch = match[0];
+        const idx = match.index;
+
+        // Get context around the date (50 chars before, 20 after)
+        const contextStart = Math.max(0, idx - 50);
+        const contextEnd = Math.min(text.length, idx + fullMatch.length + 20);
+        const context = text.substring(contextStart, contextEnd).toUpperCase();
+
+        // Extract year from date
+        let year: number | null = null;
+
+        if (match[4]) {
+            // YYYY-MM-DD format
+            year = parseInt(match[4], 10);
+        } else if (match[3]) {
+            // DD-MM-YYYY or MM-DD-YYYY format
+            const yearStr = match[3];
+            if (yearStr.length === 4) {
+                year = parseInt(yearStr, 10);
+            } else if (yearStr.length === 2) {
+                const y = parseInt(yearStr, 10);
+                year = y > 30 ? 1900 + y : 2000 + y;
             }
+        }
 
-            // Return the earliest plausible year (likely DOB, not issue date)
-            birthYears.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-            return parseInt(birthYears[0], 10);
+        if (year && year >= 1900 && year <= currentYear) {
+            // Check if this is near DOB-related text
+            const isDOB = /DOB|D\.O\.B|DATE\s*OF\s*BIRTH|BIRTH|BORN|NAISSANCE|DN/i.test(context);
+
+            // Check if this is near ISSUE/EXPIRY-related text  
+            const isIssueExpiry = /ISS|ISSUE|ISSUED|EXP|EXPIR|EXPIRY|DEL|VALID|RENEW/i.test(context);
+
+            dateContexts.push({
+                year,
+                context,
+                isDOB,
+                isIssueExpiry
+            });
+
+            console.log("Found date:", { fullMatch, year, isDOB, isIssueExpiry, context: context.substring(0, 60) });
         }
     }
 
+    // Also look for standalone years with context
+    const yearOnlyRegex = /\b(19[3-9]\d|20[0-2]\d)\b/g;
+    while ((match = yearOnlyRegex.exec(text)) !== null) {
+        const year = parseInt(match[1], 10);
+        const idx = match.index;
+        const contextStart = Math.max(0, idx - 50);
+        const contextEnd = Math.min(text.length, idx + 10);
+        const context = text.substring(contextStart, contextEnd).toUpperCase();
+
+        // Only add if not already captured in a date
+        const alreadyFound = dateContexts.some(d => d.year === year);
+        if (!alreadyFound && year <= currentYear - 10) { // At least 10 years ago
+            const isDOB = /DOB|D\.O\.B|DATE\s*OF\s*BIRTH|BIRTH|BORN|NAISSANCE|DN/i.test(context);
+            const isIssueExpiry = /ISS|ISSUE|ISSUED|EXP|EXPIR|EXPIRY|DEL|VALID|RENEW/i.test(context);
+
+            dateContexts.push({ year, context, isDOB, isIssueExpiry });
+        }
+    }
+
+    // Priority 1: Find years explicitly marked as DOB
+    const dobYears = dateContexts.filter(d => d.isDOB && !d.isIssueExpiry && d.year <= currentYear - 19);
+    if (dobYears.length > 0) {
+        console.log("Found DOB year:", dobYears[0].year);
+        return dobYears[0].year;
+    }
+
+    // Priority 2: Find years that are NOT issue/expiry dates and are old enough
+    const nonIssueYears = dateContexts.filter(d =>
+        !d.isIssueExpiry &&
+        d.year >= 1930 &&
+        d.year <= currentYear - 19
+    );
+
+    if (nonIssueYears.length > 0) {
+        // Return the oldest year (most likely to be DOB, not issue date)
+        nonIssueYears.sort((a, b) => a.year - b.year);
+        console.log("Using oldest non-issue year:", nonIssueYears[0].year);
+        return nonIssueYears[0].year;
+    }
+
+    // Priority 3: Any year old enough to be a birth year (at least 19 years ago)
+    const oldEnoughYears = dateContexts.filter(d => d.year >= 1930 && d.year <= currentYear - 19);
+    if (oldEnoughYears.length > 0) {
+        // Return the oldest year
+        oldEnoughYears.sort((a, b) => a.year - b.year);
+        console.log("Using oldest year:", oldEnoughYears[0].year);
+        return oldEnoughYears[0].year;
+    }
+
+    console.log("No valid birth year found");
     return null;
 }
 

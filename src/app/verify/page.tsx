@@ -260,11 +260,41 @@ function ValidationView({
                 </div>
             </div>
 
+            {/* Cropped portrait preview (Ontario fixed crop) */}
+            {data.idPhoto && (
+                <div className="glass-card p-4 mb-6">
+                    <h4 className="text-sm font-semibold text-white mb-3">Extracted portrait</h4>
+                    <div className="grid sm:grid-cols-2 gap-4 items-start">
+                        <div className="relative aspect-[3/4] rounded-lg overflow-hidden bg-black/30">
+                            <img
+                                src={data.idPhoto}
+                                alt="Extracted portrait from ID"
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
+                        <div className="text-sm text-white/60 space-y-2">
+                            <p>
+                                This is a fixed crop on the rectified card image (no face detection yet).
+                            </p>
+                            <p className="text-white/40">
+                                If the crop misses, retake the photo with the card centered and flat.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Extracted data */}
             <div className="glass-card p-6 mb-6">
                 <h4 className="text-lg font-semibold text-white mb-4">Extracted Information</h4>
                 <div className="space-y-3">
                     <DataRow label="OCR Confidence" value={`${Math.round(data.confidence)}%`} status={data.confidence >= 20 ? "success" : "warning"} />
+                    <DataRow label="Name" value={data.name || "Not detected"} status={data.name ? "success" : "warning"} />
+                    <DataRow
+                        label="ID number"
+                        value={data.idNumber || "Not detected"}
+                        status={data.idNumber ? "success" : "warning"}
+                    />
                     <DataRow label="Birth Year" value={data.birthYear?.toString() || "Not detected"} status={data.birthYear ? "success" : "error"} />
                     <DataRow label="Calculated Age" value={result.age ? `${result.age} years` : "—"} status={result.isOver19 ? "success" : "error"} />
                     <DataRow label="Age Requirement" value={result.isOver19 ? "Met (19+)" : "Not met"} status={result.isOver19 ? "success" : "error"} />
@@ -282,6 +312,22 @@ function ValidationView({
                     )}
                 </div>
             </div>
+
+            {/* Field-level OCR details */}
+            {data.fieldResults && (
+                <div className="glass-card p-6 mb-6">
+                    <h4 className="text-lg font-semibold text-white mb-4">Field OCR details</h4>
+                    <div className="space-y-3">
+                        <FieldRow label="Name" value={data.fieldResults.name?.normalized ?? data.fieldResults.name?.text ?? "—"} confidence={data.fieldResults.name?.confidence} />
+                        <FieldRow label="DL number" value={data.fieldResults.dlNumber?.normalized ?? data.fieldResults.dlNumber?.text ?? "—"} confidence={data.fieldResults.dlNumber?.confidence} />
+                        <FieldRow label="DOB" value={data.fieldResults.dob?.normalized ?? data.fieldResults.dob?.text ?? "—"} confidence={data.fieldResults.dob?.confidence} />
+                        <FieldRow label="Expiry" value={data.fieldResults.expiry?.normalized ?? data.fieldResults.expiry?.text ?? "—"} confidence={data.fieldResults.expiry?.confidence} />
+                    </div>
+                    <p className="text-xs text-white/40 mt-4">
+                        These come from targeted crops on the rectified card image.
+                    </p>
+                </div>
+            )}
 
 
             {/* Raw OCR text (expandable for debugging) */}
@@ -362,6 +408,25 @@ function DataRow({ label, value, status }: { label: string; value: string; statu
     );
 }
 
+function FieldRow({ label, value, confidence }: { label: string; value: string; confidence?: number }) {
+    const c = typeof confidence === "number" ? Math.round(confidence) : null;
+    const status =
+        c === null ? "text-white/40" : c >= 70 ? "text-green-400" : c >= 50 ? "text-yellow-400" : "text-red-400";
+
+    return (
+        <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+                <p className="text-white/60">{label}</p>
+                <p className="text-white break-words">{value}</p>
+            </div>
+            <div className="text-right flex-shrink-0">
+                <p className="text-white/40 text-xs">Confidence</p>
+                <p className={`font-medium ${status}`}>{c === null ? "—" : `${c}%`}</p>
+            </div>
+        </div>
+    );
+}
+
 // Matching View Component
 function MatchingView() {
     return (
@@ -413,7 +478,7 @@ function SuccessView() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
-                    All ID data has been securely deleted from memory
+                    Your ID data stayed on-device and in memory only for this session
                 </p>
             </div>
         </div>

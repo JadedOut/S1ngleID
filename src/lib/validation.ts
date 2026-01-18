@@ -33,12 +33,38 @@ export function validateIDData(data: IDData): ValidationResult {
     let age: number | null = null;
     let isOver19 = false;
 
+    // Field-level OCR warnings (preferred over global confidence).
+    if (data.fieldResults) {
+        for (const [key, field] of Object.entries(data.fieldResults)) {
+            if (!field) continue;
+            if (typeof field.confidence === "number" && field.confidence < 50) {
+                warnings.push({
+                    code: `LOW_FIELD_CONFIDENCE_${key.toUpperCase()}`,
+                    message: `${key} OCR confidence is low (${Math.round(field.confidence)}%). Consider retaking the photo with better lighting.`,
+                });
+            }
+        }
+    }
+
     // OCR confidence is now just a warning, not an error
     // The key metric is whether we can extract the birth year
     if (data.confidence < 20) {
         warnings.push({
             code: "LOW_CONFIDENCE",
             message: `OCR confidence is low (${Math.round(data.confidence)}%), but verification can proceed if birth year was detected.`,
+        });
+    }
+
+    // Name is useful for debugging and UX but not required for age.
+    if (!data.name) {
+        warnings.push({
+            code: "NO_NAME",
+            message: "Name could not be extracted. Verification can still proceed.",
+        });
+    } else if (!/^[a-zA-Z\s,'-]{2,}$/.test(data.name)) {
+        warnings.push({
+            code: "NAME_SUSPICIOUS",
+            message: "Name text looks unusual. Retake the photo if the result looks wrong.",
         });
     }
 
@@ -74,11 +100,17 @@ export function validateIDData(data: IDData): ValidationResult {
         }
     }
 
-    // ID number is optional - just for information
+    // Ontario DL number validation (strict format), but keep as warning to avoid blocking age-only verification.
+    const ontarioDlPattern = /^\d{5}-\d{5}-\d{5}$/;
     if (!data.idNumber) {
         warnings.push({
             code: "NO_ID_NUMBER",
             message: "ID number could not be extracted. Verification can still proceed.",
+        });
+    } else if (!ontarioDlPattern.test(data.idNumber)) {
+        warnings.push({
+            code: "INVALID_ID_NUMBER_FORMAT",
+            message: "ID number does not match expected Ontario format (#####-#####-#####). Retake the photo if you need a valid number.",
         });
     }
 

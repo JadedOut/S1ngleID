@@ -474,11 +474,7 @@ export default function VerifyPage() {
 
                     {/* Step: Success */}
                     {currentStep === "success" && (
-<<<<<<< HEAD
                         <SuccessView faceMatchConfidence={faceMatchResult?.confidence} credentialId={credentialId} />
-=======
-                        <SuccessView />
->>>>>>> 6f92f7692ea97cc4c571e693fe2b846aba879ba2
                     )}
 
                     {/* Step: Error */}

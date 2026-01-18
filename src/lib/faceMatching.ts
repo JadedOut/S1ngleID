@@ -49,6 +49,9 @@ export interface FaceMatchResult {
     /** Whether faces match (score >= MATCH_THRESHOLD) */
     isMatch: boolean;
 
+    /** Match confidence score (0-1, higher is better) */
+    confidence: number;
+
     /** Face descriptors for potential future use */
     idFaceDescriptor: Float32Array | null;
     selfieFaceDescriptor: Float32Array | null;
@@ -228,6 +231,7 @@ export async function matchFaces(
 
     return {
         isMatch,
+        confidence: faceApiScore,
         idFaceDescriptor: idFace.descriptor,
         selfieFaceDescriptor: selfieFace.descriptor,
     };
@@ -255,6 +259,7 @@ async function createImageElement(dataUrl: string): Promise<HTMLImageElement> {
 function createErrorResult(error: string): FaceMatchResult {
     return {
         isMatch: false,
+        confidence: 0,
         idFaceDescriptor: null,
         selfieFaceDescriptor: null,
         error,

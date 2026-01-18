@@ -43,6 +43,11 @@ export default function DemoCasinoPage() {
     // router.push('/setup-passkey'); 
   };
 
+  const handleLogout = () => {
+    setAgeVerified(false);
+    setMessage('Logged out. Please verify again to play.');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-900 via-orange-900 to-yellow-900">
       {/* Casino Header */}
@@ -150,6 +155,13 @@ export default function DemoCasinoPage() {
                   className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-lg font-bold hover:from-green-600 hover:to-emerald-600 transition shadow-lg shadow-green-900/20"
                 >
                   🎰 Play Slots
+                </button>
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full bg-gray-800/50 border border-gray-600/30 text-gray-300 py-3 rounded-lg font-bold hover:bg-gray-800/80 transition"
+                >
+                  🚪 Log Out
                 </button>
               </div>
             </>

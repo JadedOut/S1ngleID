@@ -1,13 +1,13 @@
 # SDUARF - Age Verification App
 
-A privacy-first age verification web application that processes ID documents and performs face matching entirely on the client-side.
+Concept: A privacy-first age verification web application that immediately deletes all personal data after processing ID documents and performing face matching.
 
-## Conceptual Features
+## Features
 
-- **Privacy-First**: All processing (OCR, face matching) happens in your browser
 - **ID Document OCR**: Extracts date of birth, expiry date, and license number
 - **Live Face Matching**: Compares your selfie with your ID photo using AI
 - **No Server Storage**: Your ID data never leaves your device
+- **Privacy-First**: Your ID data is immediately deleted after processing
 
 ## Prerequisites
 
@@ -38,7 +38,6 @@ The selfie capture requires camera access. If you see a camera error:
 ### "Camera requires HTTPS"
 - Cameras only work on HTTPS or localhost
 - Use `http://localhost:3000` (not your IP address)
-- Don't use `http://192.168.x.x:3000` - this won't work
 
 ### "Camera permission denied"
 1. Look for a camera icon in your browser's address bar
@@ -78,11 +77,12 @@ public/
 ## How It Works
 
 1. **Upload ID**: Take a photo of your driver's license
-2. **OCR Processing**: Tesseract.js extracts your date of birth
-3. **Age Validation**: Confirms you're 19+ and ID isn't expired
-4. **Take Selfie**: Live camera capture (cannot be faked with photo)
-5. **Face Match**: AI compares your selfie with ID photo
-6. **Verified**: Success if face match confidence >= 75%
+2. **OCR Processing**: Tesseract.js extracts license information
+3. **License Validation**: Confirms license is valid
+4. **Age Validation**: Confirms you're 19+
+5. **Take Selfie**: Live camera capture (cannot be faked with photo)
+6. **Face Match**: AI compares your selfie with ID photo
+7. **Verified**: Success if face match confidence >= 75%
 
 ## Data Flow & Field Storage
 
@@ -112,10 +112,7 @@ All data is stored **in-memory only** (React state) and never persisted to disk 
 | Field | Type | Description |
 |-------|------|-------------|
 | `isMatch` | boolean | Faces match (confidence >= 75%) |
-| `confidence` | number | Weighted score (0-1) |
-| `faceApiScore` | number | face-api.js score (40% weight) |
-| `tensorFlowScore` | number | TensorFlow.js score (35% weight) - placeholder |
-| `trackingScore` | number | tracking.js score (25% weight) - placeholder |
+| `confidence` | number | Match confidence score (0-1) |
 | `idFaceDescriptor` | Float32Array | 128-dim face embedding from ID |
 | `selfieFaceDescriptor` | Float32Array | 128-dim face embedding from selfie |
 
@@ -133,7 +130,6 @@ All data is stored **in-memory only** (React state) and never persisted to disk 
 - **Next.js 14** - React framework
 - **Tesseract.js** - Client-side OCR
 - **face-api.js** - Face detection and matching
-- **TensorFlow.js** - AI model runtime
 - **Tailwind CSS** - Styling
 
 ## Browser Support

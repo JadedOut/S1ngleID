@@ -2,19 +2,8 @@
  * Face Matching Service
  * ======================
  * 
- * This module provides face detection and matching functionality using multiple
- * AI libraries for robust verification. All processing happens client-side.
- * 
- * ARCHITECTURE:
- * - Primary: face-api.js for face detection, landmark extraction, and descriptor matching
- * - Secondary: TensorFlow.js (future: FaceNet embeddings)
- * - Tertiary: tracking.js (future: additional feature matching)
- * 
- * WEIGHTED SCORING:
- * - face-api.js: 40% weight
- * - TensorFlow.js: 35% weight  
- * - tracking.js: 25% weight
- * - Final threshold: >= 0.75 for pass
+ * This module provides face detection and matching functionality using face-api.js.
+ * All processing happens client-side for privacy.
  * 
  * ============================================================================
  * FINAL OUTPUT FIELDS (for Phase 5 WebAuthn):
@@ -22,10 +11,7 @@
  * 
  * FaceMatchResult {
  *   isMatch: boolean          - Whether faces match (score >= threshold)
- *   confidence: number        - Overall weighted confidence (0-1)
- *   faceApiScore: number      - face-api.js similarity score (0-1)
- *   tensorFlowScore: number   - TensorFlow.js score (0-1) [placeholder]
- *   trackingScore: number     - tracking.js score (0-1) [placeholder]
+ *   confidence: number        - Match confidence score (0-1)
  *   idFaceDescriptor: Float32Array | null  - Face descriptor from ID photo
  *   selfieFaceDescriptor: Float32Array | null - Face descriptor from selfie
  * }
@@ -40,6 +26,30 @@
 import * as faceapi from 'face-api.js';
 
 // ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+const CONFIG = {
+    /** 
+     * Matching threshold 
+     * Faces must score >= this value to be considered a match 
+     */
+    MATCH_THRESHOLD: 0.75,
+
+    /**
+     * 🔧 DEBUG: Confidence boost
+     * Set to a value > 0 to artificially increase match confidence for testing
+     * e.g., 0.15 adds 15% to the final score
+     * 
+     * ⚠️ SET TO 0 FOR PRODUCTION
+     */
+    DEBUG_CONFIDENCE_BOOST: 0.15,
+
+    /** Path to face-api.js model files */
+    MODELS_PATH: '/models'
+};
+
+// ============================================================================
 // TYPES
 // ============================================================================
 
@@ -50,13 +60,8 @@ export interface FaceMatchResult {
     /** Whether faces match (confidence >= MATCH_THRESHOLD) */
     isMatch: boolean;
 
-    /** Overall weighted confidence score (0-1) */
+    /** Confidence score (0-1) */
     confidence: number;
-
-    /** Individual library scores */
-    faceApiScore: number | null;
-    tensorFlowScore: number | null;  // TODO: Phase 4b
-    trackingScore: number | null;    // TODO: Phase 4c
 
     /** Face descriptors for potential future use */
     idFaceDescriptor: Float32Array | null;
@@ -75,32 +80,6 @@ export interface FaceDetectionResult {
     confidence: number;
     error?: string;
 }
-
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
-
-/** Matching threshold - faces must score >= this value to be considered a match */
-const MATCH_THRESHOLD = 0.75;
-
-/**
- * 🔧 DEBUG: Confidence boost for testing
- * Set to a value > 0 to artificially increase match confidence
- * e.g., 0.15 adds 15% to the final score
- * 
- * ⚠️ SET TO 0 FOR PRODUCTION
- */
-const DEBUG_CONFIDENCE_BOOST = 0.15;  // Change to 0 for production
-
-/** Weight for each library in final score calculation */
-const WEIGHTS = {
-    faceApi: 0.40,      // face-api.js (most mature, reliable)
-    tensorFlow: 0.35,   // TensorFlow.js FaceNet (high accuracy)
-    tracking: 0.25,     // tracking.js (additional verification)
-};
-
-/** Path to face-api.js model files */
-const MODELS_PATH = '/models';
 
 // ============================================================================
 // STATE
@@ -132,15 +111,15 @@ export async function loadFaceApiModels(
     try {
         onProgress?.('Loading face detection model...');
         console.log('[FaceMatch] Loading SSD MobileNet model...');
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODELS_PATH);
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(CONFIG.MODELS_PATH);
 
         onProgress?.('Loading face landmark model...');
         console.log('[FaceMatch] Loading face landmark model...');
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_PATH);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(CONFIG.MODELS_PATH);
 
         onProgress?.('Loading face recognition model...');
         console.log('[FaceMatch] Loading face recognition model...');
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_PATH);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(CONFIG.MODELS_PATH);
 
         modelsLoaded = true;
         console.log('[FaceMatch] All models loaded successfully');
@@ -215,12 +194,11 @@ export async function detectFace(imageData: string): Promise<FaceDetectionResult
 
 /**
  * Compare two faces and determine if they match
- * Uses weighted scoring from multiple libraries (currently only face-api.js)
  * 
  * @param idPhotoData - Base64 image from ID document
  * @param selfieData - Base64 image from live selfie
  * @param onProgress - Optional progress callback
- * @returns Face match result with scores and descriptors
+ * @returns Face match result
  */
 export async function matchFaces(
     idPhotoData: string,
@@ -262,70 +240,25 @@ export async function matchFaces(
 
     console.log('[FaceMatch] Distance:', distance, 'Score:', faceApiScore);
 
-    // Calculate weighted score (currently only face-api.js is implemented)
-    // TODO: Add TensorFlow.js and tracking.js scores in Phase 4b/4c
-    let weightedScore = calculateWeightedScore({
-        faceApi: faceApiScore,
-        tensorFlow: null,  // Not yet implemented
-        tracking: null,    // Not yet implemented
-    });
+    let finalScore = faceApiScore;
 
     // Apply debug confidence boost (set to 0 in production)
-    if (DEBUG_CONFIDENCE_BOOST > 0) {
-        console.log('[FaceMatch] 🔧 DEBUG: Applying confidence boost of', DEBUG_CONFIDENCE_BOOST);
-        weightedScore = Math.min(1, weightedScore + DEBUG_CONFIDENCE_BOOST);
+    if (CONFIG.DEBUG_CONFIDENCE_BOOST > 0) {
+        console.log('[FaceMatch] 🔧 DEBUG: Applying confidence boost of', CONFIG.DEBUG_CONFIDENCE_BOOST);
+        finalScore = Math.min(1, finalScore + CONFIG.DEBUG_CONFIDENCE_BOOST);
     }
 
-    const isMatch = weightedScore >= MATCH_THRESHOLD;
+    const isMatch = finalScore >= CONFIG.MATCH_THRESHOLD;
 
     onProgress?.(100, isMatch ? 'Match confirmed!' : 'Faces do not match');
-    console.log('[FaceMatch] Final result:', { isMatch, weightedScore, rawScore: weightedScore - DEBUG_CONFIDENCE_BOOST });
+    console.log('[FaceMatch] Final result:', { isMatch, finalScore, rawScore: finalScore - CONFIG.DEBUG_CONFIDENCE_BOOST });
 
     return {
         isMatch,
-        confidence: weightedScore,
-        faceApiScore,
-        tensorFlowScore: null,
-        trackingScore: null,
+        confidence: finalScore,
         idFaceDescriptor: idFace.descriptor,
         selfieFaceDescriptor: selfieFace.descriptor,
     };
-}
-
-// ============================================================================
-// SCORING
-// ============================================================================
-
-/**
- * Calculate weighted score from individual library scores
- * Handles missing scores by redistributing weights
- */
-function calculateWeightedScore(scores: {
-    faceApi: number | null;
-    tensorFlow: number | null;
-    tracking: number | null;
-}): number {
-    let totalWeight = 0;
-    let weightedSum = 0;
-
-    if (scores.faceApi !== null) {
-        weightedSum += scores.faceApi * WEIGHTS.faceApi;
-        totalWeight += WEIGHTS.faceApi;
-    }
-
-    if (scores.tensorFlow !== null) {
-        weightedSum += scores.tensorFlow * WEIGHTS.tensorFlow;
-        totalWeight += WEIGHTS.tensorFlow;
-    }
-
-    if (scores.tracking !== null) {
-        weightedSum += scores.tracking * WEIGHTS.tracking;
-        totalWeight += WEIGHTS.tracking;
-    }
-
-    // Normalize by actual total weight used
-    if (totalWeight === 0) return 0;
-    return weightedSum / totalWeight;
 }
 
 // ============================================================================
@@ -351,9 +284,6 @@ function createErrorResult(error: string): FaceMatchResult {
     return {
         isMatch: false,
         confidence: 0,
-        faceApiScore: null,
-        tensorFlowScore: null,
-        trackingScore: null,
         idFaceDescriptor: null,
         selfieFaceDescriptor: null,
         error,
@@ -371,5 +301,5 @@ export function areModelsLoaded(): boolean {
  * Get match threshold value
  */
 export function getMatchThreshold(): number {
-    return MATCH_THRESHOLD;
+    return CONFIG.MATCH_THRESHOLD;
 }

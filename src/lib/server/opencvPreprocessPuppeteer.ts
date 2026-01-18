@@ -529,12 +529,6 @@ async function acquirePage(): Promise<Page> {
   // Wait for OpenCV.js to load and be ready
   console.log("[Puppeteer] Waiting for OpenCV.js to load...");
   
-  // #region agent log
-  const fs = require('fs');
-  const logPath = 'c:\\Users\\jiami\\OneDrive\\Desktop\\workspace\\kms_please\\sduarf\\.cursor\\debug.log';
-  fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:480',message:'About to evaluate ensureOpenCvReady',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'A'})+'\n');
-  // #endregion
-  
   const opencvStartTime = Date.now();
   try {
     // Use a clearable timeout to avoid race condition where timeout fires after evaluate completes
@@ -557,15 +551,8 @@ async function acquirePage(): Promise<Page> {
     
     await Promise.race([evaluatePromise, timeoutPromise]);
     
-    // #region agent log
-    fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:493',message:'ensureOpenCvReady completed',data:{elapsedMs:Date.now()-opencvStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'A'})+'\n');
-    // #endregion
-    
     console.log("[Puppeteer] OpenCV.js loaded and ready");
   } catch (error) {
-    // #region agent log
-    fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:498',message:'ensureOpenCvReady failed',data:{error:error instanceof Error ? error.message : String(error),elapsedMs:Date.now()-opencvStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'A'})+'\n');
-    // #endregion
     throw error;
   }
 
@@ -624,39 +611,12 @@ export async function preprocessIdDocumentPuppeteer(
   const startTime = Date.now();
   console.log("[Puppeteer] Starting preprocessing...");
 
-  // #region agent log
-  const fs = require('fs');
-  const logPath = 'c:\\Users\\jiami\\OneDrive\\Desktop\\workspace\\kms_please\\sduarf\\.cursor\\debug.log';
-  try {
-    fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:538',message:'preprocessIdDocumentPuppeteer called',data:{imageDataUrlLength:imageDataUrl?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
-  } catch {}
-  // #endregion
-
   let page: Page | null = null;
 
   try {
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:547',message:'About to acquire page',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
-    } catch {}
-    // #endregion
-    
     page = await acquirePage();
-    
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:552',message:'Page acquired, about to evaluate preprocessing',data:{pageIsClosed:page?.isClosed()},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
-    } catch {}
-    // #endregion
 
     // Run the preprocessing function in the browser context
-    // #region agent log
-    const evalStartTime = Date.now();
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:556',message:'About to evaluate preprocessOntarioDlToPng',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
-    } catch {}
-    // #endregion
-    
     // Use clearable timeout to avoid race condition
     let preprocessTimeoutId: NodeJS.Timeout | null = null;
     const preprocessTimeoutPromise = new Promise<never>((_, reject) => {
@@ -681,12 +641,6 @@ export async function preprocessIdDocumentPuppeteer(
     });
     
     const result = await Promise.race([preprocessEvaluatePromise, preprocessTimeoutPromise]) as { preprocessedPngDataUrl: string; rectifiedPngDataUrl: string };
-    
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:571',message:'Preprocessing evaluation completed',data:{elapsedMs:Date.now()-evalStartTime,hasResult:!!result},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
-    } catch {}
-    // #endregion
 
     // Convert data URLs to Buffers
     const preprocessedBuffer = base64DataUrlToBuffer(result.preprocessedPngDataUrl);

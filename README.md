@@ -76,7 +76,7 @@ WEBAUTHN_RP_NAME="AgeVerify"
 # NEXT_PUBLIC_BACKEND_URL="http://localhost:4000"
 ```
 
-**Note:** The credentials are included in this repository for local development.
+> **Warning:** These credentials are for local development only. For production, use strong passwords and never commit secrets to version control. See `SECURITY.md` for a production checklist.
 
 ### 5. Set Up the Database Schema
 

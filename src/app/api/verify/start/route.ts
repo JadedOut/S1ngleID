@@ -35,24 +35,10 @@ export async function OPTIONS(request: NextRequest) {
  * Output: { ocr_passed, age_passed, userId, challenge, registrationOptions }
  */
 export async function POST(request: NextRequest) {
-  // #region agent log
-  const fs = require('fs');
-  const logPath = 'c:\\Users\\jiami\\OneDrive\\Desktop\\workspace\\kms_please\\sduarf\\.cursor\\debug.log';
-  try {
-    fs.appendFileSync(logPath, JSON.stringify({location:'verify/start/route.ts:37',message:'POST handler called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run6',hypothesisId:'F'})+'\n');
-  } catch {}
-  // #endregion
-  
   try {
     const body = await request.json();
     // Accept pre-validated data from client (fast path) OR raw images (slow path for backward compat)
     const { rawOcrText, birthDate, age, faceMatchConfidence, id_photo } = body;
-    
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'verify/start/route.ts:42',message:'Request body parsed',data:{hasRawOcrText:!!rawOcrText,hasBirthDate:!!birthDate,age,faceMatchConfidence,hasIdPhoto:!!id_photo},timestamp:Date.now(),sessionId:'debug-session',runId:'run6',hypothesisId:'F'})+'\n');
-    } catch {}
-    // #endregion
 
     console.log("[verify/start] Starting verification flow...");
     
@@ -64,20 +50,8 @@ export async function POST(request: NextRequest) {
     if (rawOcrText && birthDate && typeof age === "number") {
       console.log("[verify/start] Using pre-validated data from client (fast path)");
       
-      // #region agent log
-      try {
-        fs.appendFileSync(logPath, JSON.stringify({location:'verify/start/route.ts:64',message:'Received OCR text for validation',data:{rawOcrTextLength:rawOcrText.length,rawOcrTextPreview:rawOcrText.substring(0,200),clientBirthDate:birthDate,clientAge:age},timestamp:Date.now(),sessionId:'debug-session',runId:'run8',hypothesisId:'G'})+'\n');
-      } catch {}
-      // #endregion
-      
       // Quick server-side validation: re-extract DOB from raw text to verify client didn't lie
       const dobResult = extractDobFromOcrText(rawOcrText);
-      
-      // #region agent log
-      try {
-        fs.appendFileSync(logPath, JSON.stringify({location:'verify/start/route.ts:68',message:'Server-side DOB validation result',data:{clientBirthDate:birthDate,serverBirthDate:dobResult.birthDate,clientAge:age,serverAge:dobResult.age,hasRawMatch:!!dobResult.rawMatch,rawMatch:dobResult.rawMatch},timestamp:Date.now(),sessionId:'debug-session',runId:'run8',hypothesisId:'G'})+'\n');
-      } catch {}
-      // #endregion
       
       // Validate client-provided DOB format and age
       const clientDobValid = birthDate && /^\d{4}-\d{2}-\d{2}$/.test(birthDate) && age >= 19;
@@ -95,11 +69,6 @@ export async function POST(request: NextRequest) {
         console.log("[verify/start] Server extraction failed, but client DOB is valid format. Using client DOB:", birthDate);
       } else {
         // Both failed - reject
-        // #region agent log
-        try {
-          fs.appendFileSync(logPath, JSON.stringify({location:'verify/start/route.ts:85',message:'Both server and client DOB validation failed - rejecting',data:{clientBirthDate:birthDate,clientAge:age,clientDobValid,ocrTextLength:rawOcrText.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run8',hypothesisId:'G'})+'\n');
-        } catch {}
-        // #endregion
         const response = NextResponse.json(
           { ocr_passed: false, age_passed: false, error: "Server validation failed: could not extract DOB" },
           { status: 200 }
@@ -208,12 +177,6 @@ export async function POST(request: NextRequest) {
       timeout: 60000, // 60 seconds
     });
 
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'verify/start/route.ts:188',message:'Registration options generated',data:{rpId:WEBAUTHN_RP_ID,rpName:WEBAUTHN_RP_NAME,userId:user.id,hasChallenge:!!registrationOptions.challenge,challengeLength:registrationOptions.challenge?.length,authenticatorSelection:registrationOptions.authenticatorSelection},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'B'})+'\n');
-    } catch {}
-    // #endregion
-
     // Store the challenge in the database
     const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
     await prisma.webAuthnChallenge.create({
@@ -224,12 +187,6 @@ export async function POST(request: NextRequest) {
         expiresAt,
       },
     });
-
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'verify/start/route.ts:199',message:'Challenge stored in database',data:{userId:user.id,challenge:registrationOptions.challenge,expiresAt:expiresAt.toISOString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'D'})+'\n');
-    } catch {}
-    // #endregion
 
     console.log("[verify/start] Challenge stored, returning registration options");
 

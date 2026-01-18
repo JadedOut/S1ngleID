@@ -57,14 +57,6 @@ export async function POST(request: NextRequest) {
 
     console.log("[verify/complete] Verifying attestation for user:", userId);
 
-    // #region agent log
-    const fs = require('fs');
-    const logPath = 'c:\\Users\\jiami\\OneDrive\\Desktop\\workspace\\kms_please\\sduarf\\.cursor\\debug.log';
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'verify/complete/route.ts:58',message:'Starting verification',data:{userId,hasAttestationResponse:!!attestationResponse,attestationId:attestationResponse?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'D'})+'\n');
-    } catch {}
-    // #endregion
-
     // === Step 1: Load expected challenge from database ===
     const challengeRecord = await prisma.webAuthnChallenge.findFirst({
       where: {
@@ -74,12 +66,6 @@ export async function POST(request: NextRequest) {
       },
       orderBy: { createdAt: "desc" }, // Most recent first
     });
-
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'verify/complete/route.ts:69',message:'Challenge lookup result',data:{found:!!challengeRecord,userId,challengeFromDb:challengeRecord?.challenge,challengeFromResponse:attestationResponse?.response?.clientDataJSON ? JSON.parse(Buffer.from(attestationResponse.response.clientDataJSON, 'base64url').toString()).challenge : null},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'D'})+'\n');
-    } catch {}
-    // #endregion
 
     if (!challengeRecord) {
       console.error("[verify/complete] No valid challenge found for user:", userId);
@@ -97,12 +83,6 @@ export async function POST(request: NextRequest) {
     // === Step 2: Verify attestation ===
     let verification;
     try {
-      // #region agent log
-      try {
-        fs.appendFileSync(logPath, JSON.stringify({location:'verify/complete/route.ts:86',message:'Calling verifyRegistrationResponse',data:{expectedChallenge:challengeRecord.challenge,expectedOrigin:WEBAUTHN_ORIGIN,expectedRPID:WEBAUTHN_RP_ID},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'E'})+'\n');
-      } catch {}
-      // #endregion
-      
       verification = await verifyRegistrationResponse({
         response: attestationResponse,
         expectedChallenge: challengeRecord.challenge,
@@ -110,18 +90,7 @@ export async function POST(request: NextRequest) {
         expectedRPID: WEBAUTHN_RP_ID,
         requireUserVerification: false, // Allow UV-capable but not required
       });
-      
-      // #region agent log
-      try {
-        fs.appendFileSync(logPath, JSON.stringify({location:'verify/complete/route.ts:93',message:'Verification succeeded',data:{verified:verification.verified,hasRegistrationInfo:!!verification.registrationInfo},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'E'})+'\n');
-      } catch {}
-      // #endregion
     } catch (verifyError) {
-      // #region agent log
-      try {
-        fs.appendFileSync(logPath, JSON.stringify({location:'verify/complete/route.ts:96',message:'Verification error',data:{errorName:(verifyError as Error)?.name,errorMessage:(verifyError as Error)?.message,errorStack:(verifyError as Error)?.stack?.substring(0,300)},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'E'})+'\n');
-      } catch {}
-      // #endregion
       console.error("[verify/complete] Verification error:", verifyError);
       const response = NextResponse.json(
         { 
@@ -134,11 +103,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (!verification.verified || !verification.registrationInfo) {
-      // #region agent log
-      try {
-        fs.appendFileSync(logPath, JSON.stringify({location:'verify/complete/route.ts:105',message:'Verification failed (not verified)',data:{verified:verification.verified,hasRegistrationInfo:!!verification.registrationInfo},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'E'})+'\n');
-      } catch {}
-      // #endregion
       console.error("[verify/complete] Verification failed");
       const response = NextResponse.json(
         { error: "Credential verification failed" },

@@ -1,76 +1,72 @@
 # Security & Architecture Overview
 
-**Current Status:** Is anything truly done on the backend?
-**Answer:** **NO.**
+**Current Status:** Hybrid client-server architecture with server-side verification.
 
-Currently, the application runs 100% on the client-side (in the user's browser). There is **zero** server-side verification. The Next.js server acts only as a file server, delivering the HTML/JS/CSS to the browser.
+## Architecture
 
-## The "Trusting the Client" Vulnerability
-Because all logic executes in the user's browser, the user (the "client") has complete control over the execution environment. A motivated user with technical knowledge can modify **any** data field or logic flow listed below.
+The application uses a **hybrid architecture**:
 
-### User-Modifiable Data Fields
-The following fields exist in the browser's memory (RAM) and can be modified using Browser DevTools, Console injection, or Network interception.
+- **Client-side**: Face detection/matching (via face-api.js), camera capture, UI flow
+- **Server-side**: OCR processing (Tesseract.js + Puppeteer/OpenCV), DOB extraction and age validation, WebAuthn credential generation and verification
 
-#### 1. Input Data
-| Field | Modifiable? | Method |
-|-------|-------------|--------|
-| `idImage` | YES | Can inject base64 string, bypass camera, upload edited photo |
-| `selfieImage` | YES | Can inject pre-recorded video frame, bypass liveness check |
-| `Camera Video Stream` | YES | Can use "Virtual Webcam" software (OBS) to feed fake video |
+### Server-Side Verification Flow
 
-#### 2. OCR Extraction Logic (`ocr.ts`)
-| Field | Internal Name | Vulnerability |
-|-------|---------------|---------------|
-| **Birth Date** | `birthDate` | User can set breakpoint in `extractIDData` and overwrite return value |
-| **Expiry Date** | `expiryDate` | Can be manually set to future date |
-| **Raw Text** | `text` | Tesseract output can be intercepted and rewritten |
+1. Client captures ID photo and selfie
+2. Client sends ID image to `/api/ocr/recognize` for server-side OCR
+3. Client performs face matching locally (for UX speed)
+4. Client sends OCR text + extracted DOB to `/api/verify/start`
+5. **Server re-extracts DOB from OCR text** to validate client claims
+6. Server verifies age >= 19, creates user, generates WebAuthn challenge
+7. Client registers passkey, sends attestation to `/api/verify/complete`
+8. Server verifies attestation and stores credential
 
-#### 3. Verification Logic (`validation.ts`)
-| Field | Internal Name | Vulnerability |
-|-------|---------------|---------------|
-| **Is Over 19?** | `isOver19` | User can set `const isOver19 = true` in console |
-| **Is Valid?** | `isValid` | Can force function to always return `true` |
-| **Results** | `ValidationResult` | The entire object can be mocked |
+## Remaining Vulnerabilities
 
-#### 4. Face Matching (`faceMatching.ts`)
-| Field | Internal Name | Vulnerability |
-|-------|---------------|---------------|
-| **Match Score** | `confidence` | Can be manually set to `1.0` (100%) |
-| **Threshold** | `MATCH_THRESHOLD` | Can be lowered to `0.0` to accept any face |
-| **Result** | `isMatch` | Can modify `matchFaces` to always return `{ isMatch: true }` |
+### Client-Side Face Matching
 
-## Attack Vectors
+Face matching runs in the browser for UX reasons. A motivated attacker could:
 
-### A. The "Console Hack"
-A user opens Chrome DevTools and pastes a script to overwrite the validation function:
-```javascript
-// Example attack
-validateIDData = () => ({ 
-    isValid: true, 
-    isOver19: true, 
-    age: 25 
-});
-```
-**Result:** The UI updates to show "Verified" instantly, regardless of the ID used.
+| Attack | Method |
+|--------|--------|
+| Virtual camera spoofing | Use OBS Virtual Camera to feed pre-recorded video |
+| Console injection | Override `matchFaces` to always return `{ isMatch: true }` |
+| React state manipulation | Use React DevTools to skip the face matching step |
 
-### B. Virtual Camera Spoofing
-Instead of a real selfie, the user selects "OBS Virtual Camera" as their media input. They play a video of someone else.
-**Result:** The liveness check (if simple) and face match pass using someone else's face.
+**Mitigation path**: Move face matching to server using a headless browser or native face-api.js on Node.js.
 
-### C. Client-Side State Injection
-React State (`useState`) determines what is shown on screen.
-**Result:** A user can use React Developer Tools to toggle the `step` from "upload" directly to "success", bypassing all checks.
+### OCR Text Manipulation
 
-## Path to Security
-To make this secure while maintaining privacy, we must move the *verification of trust* to a component the user cannot control.
+While the server re-extracts DOB from OCR text, the client provides the raw OCR text. An attacker could:
 
-### Implementation: Server-Side Verification
-Send the data to the server, verify it there, then delete it immediately.
-*   **Flow:** Client Uploads ID/Selfie -> Server OCRs & Matches -> Server returns Token -> Server deletes images.
-*   **Pros:** Secure. User cannot spoof the server's execution.
-*   **Cons:** Data leaves the device (even if transiently). Requires server resources.
+| Attack | Method |
+|--------|--------|
+| Inject fake OCR text | Send fabricated text with a fake DOB to `/api/verify/start` |
+
+**Current mitigation**: Server-side DOB extraction uses the same regex patterns; if extraction fails on both ends, verification is rejected.
+
+**Stronger mitigation**: Run OCR entirely server-side by sending only the raw image (the "slow path" already supports this).
+
+## What IS Verified Server-Side
+
+| Component | Server-Side? | Notes |
+|-----------|--------------|-------|
+| OCR text extraction | YES | Tesseract.js runs on Node.js |
+| Image preprocessing | YES | Puppeteer + OpenCV.js or Sharp fallback |
+| DOB extraction | YES | Server re-extracts from OCR text |
+| Age calculation | YES | Server calculates and enforces 19+ |
+| WebAuthn challenge | YES | Generated and stored server-side |
+| WebAuthn verification | YES | Attestation verified with @simplewebauthn/server |
+| Credential storage | YES | Stored in PostgreSQL via Prisma |
+
+## Production Checklist
+
+- [ ] Use HTTPS in production (required for WebAuthn)
+- [ ] Set strong `DATABASE_URL` credentials (not the default `password`)
+- [ ] Configure `WEBAUTHN_RP_ID` and `WEBAUTHN_ORIGIN` for your domain
+- [ ] Consider rate limiting on verification endpoints
+- [ ] Enable server-side face matching for high-security deployments
+- [ ] Review Puppeteer sandbox settings if running in containers
 
 ## Conclusion
-**Currently, S1ngleID is a "Client-Side Demo".** It prevents accidental errors but provides **zero security** against malicious users.
 
-To prevent modification, the *decision* ("Is this user 19?") **MUST** happen on a trusted server, which means the raw evidence (Images) or a cryptographic proof of them must be sent to that server.
+S1ngleID now performs **server-side age verification**. The server controls the final decision ("Is this user 19?") based on OCR text it processes and validates. Face matching remains client-side for UX, which is acceptable for age verification but not for high-security identity verification.

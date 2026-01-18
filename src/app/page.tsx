@@ -60,8 +60,8 @@ export default function Home() {
                     </span>
                 </div>
 
-                {/* CTA Button */}
-                <div className="mb-16">
+                {/* CTA Buttons */}
+                <div className="mb-16 flex flex-col sm:flex-row gap-4 justify-center">
                     <Link href="/verify" className="btn-primary inline-flex items-center gap-3">
                         <span>Get Verified</span>
                         <svg
@@ -75,6 +75,22 @@ export default function Home() {
                                 strokeLinejoin="round"
                                 strokeWidth={2}
                                 d="M13 7l5 5m0 0l-5 5m5-5H6"
+                            />
+                        </svg>
+                    </Link>
+                    <Link href="/authenticate" className="btn-secondary inline-flex items-center gap-3">
+                        <span>Already Verified?</span>
+                        <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
                             />
                         </svg>
                     </Link>

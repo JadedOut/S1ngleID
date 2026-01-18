@@ -1,6 +1,9 @@
 {
   "/page": "app/page.js",
-  "/api/verify/start/route": "app/api/verify/start/route.js",
   "/verify/page": "app/verify/page.js",
-  "/api/verify/complete/route": "app/api/verify/complete/route.js"
+  "/api/verify/start/route": "app/api/verify/start/route.js",
+  "/api/verify/complete/route": "app/api/verify/complete/route.js",
+  "/authenticate/page": "app/authenticate/page.js",
+  "/api/auth/start/route": "app/api/auth/start/route.js",
+  "/api/auth/verify/route": "app/api/auth/verify/route.js"
 }

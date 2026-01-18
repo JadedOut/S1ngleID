@@ -36,7 +36,6 @@ export default function VerifyPage() {
     const [failedStep, setFailedStep] = useState<Step | null>(null);
 
     // WebAuthn state
-    const [credentialId, setCredentialId] = useState<string | null>(null);
     const [webauthnStatus, setWebauthnStatus] = useState<string>("");
 
     // Handle ID upload complete
@@ -309,8 +308,7 @@ export default function VerifyPage() {
             }
 
             // Success!
-            console.log("[WebAuthn] Registration complete, credential_id:", completeResult.credential_id);
-            setCredentialId(completeResult.credential_id);
+            console.log("[WebAuthn] Registration complete");
             setCurrentStep("success");
 
         } catch (error) {
@@ -359,7 +357,6 @@ export default function VerifyPage() {
         setFaceMatchResult(null);
         setErrorMessage(null);
         setFailedStep(null);
-        setCredentialId(null);
         setWebauthnStatus("");
         setCurrentStep("upload");
         setStepIndex(0);
@@ -474,7 +471,7 @@ export default function VerifyPage() {
 
                     {/* Step: Success */}
                     {currentStep === "success" && (
-                        <SuccessView faceMatchConfidence={faceMatchResult?.confidence} credentialId={credentialId} />
+                        <SuccessView faceMatchConfidence={faceMatchResult?.confidence} />
                     )}
 
                     {/* Step: Error */}
@@ -788,7 +785,7 @@ function WebAuthnView({ status }: { status: string }) {
 }
 
 // Success View Component
-function SuccessView({ faceMatchConfidence, credentialId }: { faceMatchConfidence?: number; credentialId?: string | null }) {
+function SuccessView({ faceMatchConfidence }: { faceMatchConfidence?: number }) {
     return (
         <div className="max-w-md mx-auto text-center">
             <div className="glass-card p-8">
@@ -797,21 +794,31 @@ function SuccessView({ faceMatchConfidence, credentialId }: { faceMatchConfidenc
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2">Verification Complete!</h3>
+                <h3 className="text-2xl font-bold text-white mb-2">You&apos;re Verified!</h3>
                 <p className="text-white/60 mb-6">
-                    Your age has been verified and your identity confirmed.
+                    Your passkey has been created. You can now verify your age instantly on any supported site.
                 </p>
 
                 <div className="bg-white/5 rounded-xl p-4 mb-6">
-                    <p className="text-sm text-white/40 mb-2">Your credential ID</p>
-                    <p className="text-lg font-mono text-primary-400 break-all">
-                        {credentialId || "cred_..."}
-                    </p>
+                    <div className="flex items-center justify-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-green-400" />
+                        <span className="text-green-400 font-medium">Age verified: 19+</span>
+                    </div>
+                    {faceMatchConfidence && (
+                        <p className="text-xs text-white/40 mt-2">
+                            Face match: {Math.round(faceMatchConfidence * 100)}% confidence
+                        </p>
+                    )}
                 </div>
 
-                <Link href="/" className="btn-primary inline-block">
-                    Return Home
-                </Link>
+                <div className="flex gap-3 justify-center">
+                    <Link href="/" className="btn-secondary">
+                        Return Home
+                    </Link>
+                    <Link href="/authenticate" className="btn-primary">
+                        Test Re-Auth
+                    </Link>
+                </div>
             </div>
 
             {/* Privacy confirmation */}
@@ -820,7 +827,7 @@ function SuccessView({ faceMatchConfidence, credentialId }: { faceMatchConfidenc
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                    Your ID images and personal data have been permanently deleted from memory
+                    Your ID photos have been permanently deleted
                 </p>
             </div>
         </div>

@@ -885,6 +885,9 @@ video {
 .cursor-pointer {
   cursor: pointer;
 }
+.resize {
+  resize: both;
+}
 .flex-col {
   flex-direction: column;
 }
@@ -1272,6 +1275,10 @@ video {
 .shadow-primary-500\/30 {
   --tw-shadow-color: rgb(99 102 241 / 0.3);
   --tw-shadow: var(--tw-shadow-colored);
+}
+.grayscale {
+  --tw-grayscale: grayscale(100%);
+  filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
 }
 .transition-all {
   transition-property: all;

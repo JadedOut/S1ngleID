@@ -38,7 +38,7 @@ export default function Home() {
 
                 {/* Title */}
                 <h1 className="text-5xl md:text-7xl font-bold mb-6">
-                    <span className="gradient-text">SecureAge</span>
+                    <span className="gradient-text">S1ngleID</span>
                 </h1>
 
                 {/* Subtitle */}
@@ -49,14 +49,14 @@ export default function Home() {
                 {/* Description */}
                 <p className="text-lg text-white/60 mb-12 max-w-2xl mx-auto">
                     Verify your age once, use everywhere. Built with cutting-edge
-                    technology that keeps your identity safe and secure.
+                    technology that <span className="line-through opacity-50">keeps your identity safe</span> doesn&apos;t keep your identity.
                 </p>
 
                 {/* Privacy Badge */}
                 <div className="glass-card inline-flex items-center gap-3 px-6 py-3 mb-12">
                     <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
                     <span className="text-white/90 font-medium">
-                        🔒 Your ID never leaves your device
+                        🔒 Your ID never reaches our database
                     </span>
                 </div>
 
@@ -105,7 +105,7 @@ export default function Home() {
                             </svg>
                         }
                         title="100% Private"
-                        description="All processing happens on your device. Your ID data never touches our servers."
+                        description="We delete your ID data and replace it with a credential the moment you complete age verification."
                     />
                     <FeatureCard
                         icon={
@@ -145,8 +145,8 @@ export default function Home() {
                     />
                     <StepCard
                         number={2}
-                        title="Local Scan"
-                        description="We extract your birth year on-device"
+                        title="ID Scan"
+                        description="We check your ID and age"
                     />
                     <StepCard
                         number={3}
@@ -163,7 +163,7 @@ export default function Home() {
 
             {/* Footer */}
             <footer className="mt-24 text-center text-white/40 text-sm">
-                <p>© 2026 SecureAge. Built with privacy in mind.</p>
+                <p>© 2026 S1ngleID. Built with privacy in mind.</p>
             </footer>
         </div>
     );

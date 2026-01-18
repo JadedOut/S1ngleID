@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "SecureAge - Privacy-First Age Verification",
+    title: "S1ngleID - Privacy-First Age Verification",
     description: "Verify your age once, use everywhere. Your ID never leaves your device.",
     keywords: ["age verification", "privacy", "secure", "identity"],
 };

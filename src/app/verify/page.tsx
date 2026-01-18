@@ -97,9 +97,9 @@ export default function VerifyPage() {
 
         try {
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:100',message:'Starting face matching',data:{hasIdImage:!!idImage,hasSelfie:!!imageData},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'C'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:100', message: 'Starting face matching', data: { hasIdImage: !!idImage, hasSelfie: !!imageData }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run4', hypothesisId: 'C' }) }).catch(() => { });
             // #endregion
-            
+
             const faceMatchStartTime = Date.now();
             const result = await matchFaces(idImage, imageData, (progress, status) => {
                 setProcessingProgress(progress);
@@ -107,7 +107,7 @@ export default function VerifyPage() {
             });
 
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:107',message:'Face matching completed',data:{isMatch:result.isMatch,confidence:result.confidence,elapsedMs:Date.now()-faceMatchStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'C'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:107', message: 'Face matching completed', data: { isMatch: result.isMatch, confidence: result.confidence, elapsedMs: Date.now() - faceMatchStartTime }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run4', hypothesisId: 'C' }) }).catch(() => { });
             // #endregion
 
             setFaceMatchResult(result);
@@ -121,7 +121,7 @@ export default function VerifyPage() {
 
             // Face match passed! Show confirmation before WebAuthn
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:124',message:'Setting currentStep to matched',data:{confidence:result.confidence},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'E'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:124', message: 'Setting currentStep to matched', data: { confidence: result.confidence }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run5', hypothesisId: 'E' }) }).catch(() => { });
             // #endregion
             setCurrentStep("matched");
 
@@ -147,9 +147,9 @@ export default function VerifyPage() {
 
         try {
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:handleProceedToWebAuthn',message:'Starting fetch to /api/verify/start',data:{backendUrl:BACKEND_URL,hasIdImage:!!idImage,hasSelfie:!!selfieImage},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'C'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:handleProceedToWebAuthn', message: 'Starting fetch to /api/verify/start', data: { backendUrl: BACKEND_URL, hasIdImage: !!idImage, hasSelfie: !!selfieImage }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run5', hypothesisId: 'C' }) }).catch(() => { });
             // #endregion
-            
+
             const fetchStartTime = Date.now();
             // Add timeout to fetch request (30 seconds)
             const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = 30000) => {
@@ -167,7 +167,7 @@ export default function VerifyPage() {
                     throw error;
                 }
             };
-            
+
             const startResponse = await fetchWithTimeout(`${BACKEND_URL}/api/verify/start`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -180,9 +180,9 @@ export default function VerifyPage() {
                     // Don't send images - saves bandwidth and server doesn't need to re-process
                 }),
             }, 10000); // 10 seconds should be plenty without OCR
-            
+
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:handleProceedToWebAuthn:fetch',message:'Fetch completed',data:{status:startResponse.status,ok:startResponse.ok,elapsedMs:Date.now()-fetchStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'D'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:handleProceedToWebAuthn:fetch', message: 'Fetch completed', data: { status: startResponse.status, ok: startResponse.ok, elapsedMs: Date.now() - fetchStartTime }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run5', hypothesisId: 'D' }) }).catch(() => { });
             // #endregion
 
             if (!startResponse.ok) {
@@ -197,7 +197,7 @@ export default function VerifyPage() {
             const startResult = await startResponse.json();
 
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:198',message:'Parsed start response',data:{ocrPassed:startResult.ocr_passed,agePassed:startResult.age_passed,hasUserId:!!startResult.userId,hasRegistrationOptions:!!startResult.registrationOptions,hasChallenge:!!startResult.challenge,rpId:startResult.registrationOptions?.rp?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'B'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:198', message: 'Parsed start response', data: { ocrPassed: startResult.ocr_passed, agePassed: startResult.age_passed, hasUserId: !!startResult.userId, hasRegistrationOptions: !!startResult.registrationOptions, hasChallenge: !!startResult.challenge, rpId: startResult.registrationOptions?.rp?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run7', hypothesisId: 'B' }) }).catch(() => { });
             // #endregion
 
             if (!startResult.ocr_passed || !startResult.age_passed) {
@@ -216,16 +216,16 @@ export default function VerifyPage() {
 
             // Start WebAuthn registration with browser
             setWebauthnStatus("Complete passkey verification...");
-            
+
             // Debug: Log the registration options received from server
             console.log("[WebAuthn] registrationOptions received:", JSON.stringify(startResult.registrationOptions, null, 2));
             console.log("[WebAuthn] rp.id:", startResult.registrationOptions?.rp?.id);
             console.log("[WebAuthn] About to call startRegistration...");
-            
+
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:220',message:'About to call startRegistration',data:{rpId:startResult.registrationOptions?.rp?.id,rpName:startResult.registrationOptions?.rp?.name,userId:startResult.registrationOptions?.user?.id,hasChallenge:!!startResult.registrationOptions?.challenge,authenticatorSelection:startResult.registrationOptions?.authenticatorSelection},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'B'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:220', message: 'About to call startRegistration', data: { rpId: startResult.registrationOptions?.rp?.id, rpName: startResult.registrationOptions?.rp?.name, userId: startResult.registrationOptions?.user?.id, hasChallenge: !!startResult.registrationOptions?.challenge, authenticatorSelection: startResult.registrationOptions?.authenticatorSelection }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run7', hypothesisId: 'B' }) }).catch(() => { });
             // #endregion
-            
+
             let attestationResponse;
             const startRegStartTime = Date.now();
             try {
@@ -233,12 +233,12 @@ export default function VerifyPage() {
                     startResult.registrationOptions as PublicKeyCredentialCreationOptionsJSON
                 );
                 // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:228',message:'startRegistration succeeded',data:{hasId:!!attestationResponse?.id,hasResponse:!!attestationResponse?.response,elapsedMs:Date.now()-startRegStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'A'})}).catch(()=>{});
+                fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:228', message: 'startRegistration succeeded', data: { hasId: !!attestationResponse?.id, hasResponse: !!attestationResponse?.response, elapsedMs: Date.now() - startRegStartTime }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run7', hypothesisId: 'A' }) }).catch(() => { });
                 // #endregion
                 console.log("[WebAuthn] startRegistration succeeded:", attestationResponse);
             } catch (webauthnError) {
                 // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:232',message:'startRegistration FAILED',data:{errorName:(webauthnError as Error)?.name,errorMessage:(webauthnError as Error)?.message,errorStack:(webauthnError as Error)?.stack?.substring(0,200),elapsedMs:Date.now()-startRegStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'A'})}).catch(()=>{});
+                fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:232', message: 'startRegistration FAILED', data: { errorName: (webauthnError as Error)?.name, errorMessage: (webauthnError as Error)?.message, errorStack: (webauthnError as Error)?.stack?.substring(0, 200), elapsedMs: Date.now() - startRegStartTime }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run7', hypothesisId: 'A' }) }).catch(() => { });
                 // #endregion
                 console.error("[WebAuthn] startRegistration FAILED:", webauthnError);
                 console.error("[WebAuthn] Error name:", (webauthnError as Error).name);
@@ -257,11 +257,11 @@ export default function VerifyPage() {
 
             // Complete registration with backend
             setWebauthnStatus("Storing credential...");
-            
+
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:246',message:'Calling /api/verify/complete',data:{userId:startResult.userId,hasAttestationResponse:!!attestationResponse,attestationId:attestationResponse?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'E'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:246', message: 'Calling /api/verify/complete', data: { userId: startResult.userId, hasAttestationResponse: !!attestationResponse, attestationId: attestationResponse?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run7', hypothesisId: 'E' }) }).catch(() => { });
             // #endregion
-            
+
             const completeStartTime = Date.now();
             const completeResponse = await fetch(`${BACKEND_URL}/api/verify/complete`, {
                 method: "POST",
@@ -273,7 +273,7 @@ export default function VerifyPage() {
             });
 
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:256',message:'Complete response received',data:{status:completeResponse.status,ok:completeResponse.ok,elapsedMs:Date.now()-completeStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'E'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:256', message: 'Complete response received', data: { status: completeResponse.status, ok: completeResponse.ok, elapsedMs: Date.now() - completeStartTime }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run7', hypothesisId: 'E' }) }).catch(() => { });
             // #endregion
 
             if (!completeResponse.ok) {
@@ -282,7 +282,7 @@ export default function VerifyPage() {
                     const errorJson = await completeResponse.json();
                     errorText = errorJson.error || `Server error: ${completeResponse.status}`;
                     // #region agent log
-                    fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:262',message:'Complete endpoint error',data:{status:completeResponse.status,error:errorText,errorDetails:errorJson},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'E'})}).catch(()=>{});
+                    fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:262', message: 'Complete endpoint error', data: { status: completeResponse.status, error: errorText, errorDetails: errorJson }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run7', hypothesisId: 'E' }) }).catch(() => { });
                     // #endregion
                 } catch {
                     errorText = `Server error: ${completeResponse.status}`;
@@ -297,7 +297,7 @@ export default function VerifyPage() {
             const completeResult = await completeResponse.json();
 
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'verify/page.tsx:275',message:'Complete result parsed',data:{success:completeResult.success,hasCredentialId:!!completeResult.credential_id},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'E'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/560d3d18-f172-49bb-8d5c-4fa3220c1a13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'verify/page.tsx:275', message: 'Complete result parsed', data: { success: completeResult.success, hasCredentialId: !!completeResult.credential_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run7', hypothesisId: 'E' }) }).catch(() => { });
             // #endregion
 
             if (!completeResult.success) {
@@ -452,8 +452,8 @@ export default function VerifyPage() {
 
                     {/* Step: Face Match Confirmed */}
                     {currentStep === "matched" && faceMatchResult && (
-                        <MatchedView 
-                            confidence={faceMatchResult.confidence} 
+                        <MatchedView
+                            confidence={faceMatchResult.confidence}
                             onProceed={handleProceedToWebAuthn}
                             onRetry={() => {
                                 setSelfieImage(null);
@@ -706,12 +706,11 @@ function MatchingView({ progress, status }: { progress: number; status: string }
 }
 
 // Matched View Component (Face match confirmed, proceed to WebAuthn)
-function MatchedView({ 
-    confidence, 
-    onProceed, 
-    onRetry 
-}: { 
-    confidence: number; 
+function MatchedView({
+    onProceed,
+    onRetry
+}: {
+    confidence: number;
     onProceed: () => void;
     onRetry: () => void;
 }) {
@@ -723,17 +722,9 @@ function MatchedView({
                 </svg>
             </div>
             <h3 className="text-xl font-semibold text-white mb-2">Face Match Confirmed</h3>
-            <p className="text-white/60 mb-4">
-                Your face matches your ID photo with {Math.round(confidence * 100)}% confidence.
+            <p className="text-white/60 mb-6">
+                Your face matches your ID photo. You&apos;re ready to create your secure passkey.
             </p>
-
-            {/* Confidence display */}
-            <div className="bg-white/5 rounded-xl p-4 mb-6">
-                <p className="text-sm text-white/40 mb-1">Match Confidence</p>
-                <p className="text-3xl font-bold text-green-400">
-                    {Math.round(confidence * 100)}%
-                </p>
-            </div>
 
             <p className="text-white/50 text-sm mb-6">
                 Next, you&apos;ll create a secure passkey to complete verification.
@@ -804,11 +795,6 @@ function SuccessView({ faceMatchConfidence }: { faceMatchConfidence?: number }) 
                         <div className="w-3 h-3 rounded-full bg-green-400" />
                         <span className="text-green-400 font-medium">Age verified: 19+</span>
                     </div>
-                    {faceMatchConfidence && (
-                        <p className="text-xs text-white/40 mt-2">
-                            Face match: {Math.round(faceMatchConfidence * 100)}% confidence
-                        </p>
-                    )}
                 </div>
 
                 <div className="flex gap-3 justify-center">

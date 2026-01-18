@@ -1,5 +1,7 @@
 # SDUARF - Age Verification App
 
+![S1ngleID Verification Flow](docs/s1ngleid_hero.png)
+
 A privacy-first age verification web application that processes ID documents, performs face matching, and issues WebAuthn credentials for future authentication. All personal data is immediately deleted after processing.
 
 ## Features

@@ -6,7 +6,6 @@ Concept: A privacy-first age verification web application that immediately delet
 
 - **ID Document OCR**: Extracts date of birth, expiry date, and license number
 - **Live Face Matching**: Compares your selfie with your ID photo using AI
-- **No Server Storage**: Your ID data never leaves your device
 - **Privacy-First**: Your ID data is immediately deleted after processing
 
 ## Prerequisites

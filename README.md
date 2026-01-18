@@ -2,7 +2,7 @@
 
 A privacy-first age verification web application that processes ID documents and performs face matching entirely on the client-side.
 
-## Features
+## Conceptual Features
 
 - **Privacy-First**: All processing (OCR, face matching) happens in your browser
 - **ID Document OCR**: Extracts date of birth, expiry date, and license number
@@ -84,6 +84,50 @@ public/
 5. **Face Match**: AI compares your selfie with ID photo
 6. **Verified**: Success if face match confidence >= 75%
 
+## Data Flow & Field Storage
+
+All data is stored **in-memory only** (React state) and never persisted to disk or server. **NOTE:** This app is only a proof of concept. 
+
+### OCR Extraction (`src/lib/ocr.ts` → `IDData`)
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Extracted name (not validated) |
+| `idNumber` | string | Driver's license number |
+| `birthDate` | string | Full DOB in YYYY-MM-DD format |
+| `expiryDate` | string | ID expiry date |
+| `confidence` | number | OCR confidence (0-100) |
+| `rawText` | string | Raw OCR text for debugging |
+
+### Validation (`src/lib/validation.ts` → `ValidationResult`)
+| Field | Type | Description |
+|-------|------|-------------|
+| `isValid` | boolean | Overall validation pass |
+| `isOver19` | boolean | Age >= 19 years |
+| `isExpired` | boolean | ID is past expiry date |
+| `age` | number | Calculated age in years |
+| `birthDate` | string | DOB used for age calc |
+| `expiryDate` | string | Expiry date |
+
+### Face Matching (`src/lib/faceMatching.ts` → `FaceMatchResult`)
+| Field | Type | Description |
+|-------|------|-------------|
+| `isMatch` | boolean | Faces match (confidence >= 75%) |
+| `confidence` | number | Weighted score (0-1) |
+| `faceApiScore` | number | face-api.js score (40% weight) |
+| `tensorFlowScore` | number | TensorFlow.js score (35% weight) - placeholder |
+| `trackingScore` | number | tracking.js score (25% weight) - placeholder |
+| `idFaceDescriptor` | Float32Array | 128-dim face embedding from ID |
+| `selfieFaceDescriptor` | Float32Array | 128-dim face embedding from selfie |
+
+### UI State (`src/app/verify/page.tsx`)
+| State Variable | Stored Where | Cleared When |
+|----------------|--------------|--------------|
+| `idImage` | React state | Start over / page close |
+| `selfieImage` | React state | Retry selfie / start over |
+| `idData` | React state | Start over / page close |
+| `validationResult` | React state | Start over / page close |
+| `faceMatchResult` | React state | Retry selfie / start over |
+
 ## Technology Stack
 
 - **Next.js 14** - React framework
@@ -102,19 +146,6 @@ public/
 | Safari 14+ | ✅ Full support |
 | Mobile Chrome | ✅ Works on HTTPS |
 | Mobile Safari | ✅ Works on HTTPS |
-
-## Development
-
-```bash
-# Run development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Run production build
-npm start
-```
 
 ## Privacy
 

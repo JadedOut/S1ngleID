@@ -14,23 +14,177 @@ A privacy-first age verification web application that processes ID documents, pe
 
 - Node.js 18+ 
 - npm or yarn
+- Docker Desktop (for PostgreSQL database)
 - A webcam (for selfie verification)
 - Modern browser (Chrome, Firefox, Edge, Safari)
 
-## Quick Start
+## Setup Instructions
+
+### 1. Clone the Repository
 
 ```bash
-# 1. Install dependencies
+git clone <your-repo-url>
+cd sduarf
+```
+
+### 2. Install Dependencies
+
+```bash
 npm install
+```
 
-# 2. Download face recognition models
-.\scripts\download-models.ps1
+### 3. Set Up PostgreSQL with Docker
 
-# 3. Start development server
+Start the PostgreSQL container using Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+**Note:** Use `docker compose` (without hyphen) for Docker Compose V2, or `docker-compose` (with hyphen) if you have the standalone version installed. Both work the same way.
+
+This will:
+- Pull the PostgreSQL 15 Alpine image
+- Create a container named `sduarf-postgres`
+- Set up a database named `age_verify`
+- Expose PostgreSQL on port `5433` (to avoid conflicts with local PostgreSQL)
+- Create a persistent volume for data
+
+Verify the container is running:
+
+```bash
+docker ps
+```
+
+You should see `sduarf-postgres` in the list.
+
+### 4. Configure Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# .env
+DATABASE_URL="postgresql://postgres:password@localhost:5433/age_verify"
+
+# WebAuthn config (for localhost testing)
+WEBAUTHN_RP_ID="localhost"
+WEBAUTHN_ORIGIN="http://localhost:3000"
+WEBAUTHN_RP_NAME="AgeVerify"
+
+# If using split deployment (optional for local)
+# NEXT_PUBLIC_BACKEND_URL="http://localhost:4000"
+```
+
+**Note:** The credentials are included in this repository for local development. Change them for production deployments.
+
+### 5. Set Up the Database Schema
+
+Generate Prisma client and push the schema to the database:
+
+```bash
+# Generate Prisma client
+npx prisma generate
+
+# Push schema to database
+npx prisma db push
+```
+
+This creates the following tables:
+- `User` - Stores user records
+- `WebAuthnChallenge` - Stores WebAuthn challenge tokens
+- `WebAuthnCredential` - Stores registered passkey credentials
+
+(Optional) Open Prisma Studio to view the database:
+
+```bash
+npx prisma studio
+```
+
+### 6. Start the Development Server
+
+```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 7. Verify Database Connection (Optional)
+
+Test the database connection:
+
+```bash
+node scripts/test-port-5433.js
+```
+
+You should see:
+```
+✅ Connection successful!
+PostgreSQL version: PostgreSQL 15.x
+Database: age_verify
+```
+
+## Troubleshooting
+
+### Database Connection Issues
+
+**Container not running:**
+```bash
+# Check if container is running
+docker ps
+
+# Start container if stopped
+docker compose up -d
+
+# View logs
+docker compose logs postgres
+```
+
+**Port already in use:**
+If port 5433 is already in use, edit `docker-compose.yml` and change the port mapping:
+```yaml
+ports:
+  - "5434:5432"  # Change 5433 to another port
+```
+Then update `DATABASE_URL` in `.env` accordingly.
+
+**Database doesn't exist:**
+The `docker-compose.yml` creates the database automatically. If it doesn't exist:
+```bash
+# Connect to PostgreSQL
+docker exec -it sduarf-postgres psql -U postgres
+
+# Create database manually
+CREATE DATABASE age_verify;
+\q
+```
+
+**Reset database:**
+```bash
+# Stop and remove container (keeps data volume)
+docker compose down
+
+# Remove data volume (deletes all data)
+docker compose down -v
+
+# Start fresh
+docker compose up -d
+npx prisma db push
+```
+
+### Stop Docker Container
+
+When you're done developing:
+
+```bash
+# Stop container (keeps data)
+docker compose stop
+
+# Stop and remove container (keeps data volume)
+docker compose down
+
+# Stop and remove everything including data
+docker compose down -v
+```
 
 ## Camera Troubleshooting
 
@@ -160,11 +314,11 @@ This app uses a split deployment for optimal performance:
 
 ### Environment Variables
 
-Copy `.env.example` to `.env.local` and configure:
+For production deployment, set these environment variables:
 
 ```bash
-# Database (Railway PostgreSQL)
-DATABASE_URL="postgresql://..."
+# Database (Production PostgreSQL)
+DATABASE_URL="postgresql://user:password@host:port/database"
 
 # WebAuthn Configuration
 WEBAUTHN_RP_ID="your-app.vercel.app"       # Your frontend domain

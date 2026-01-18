@@ -2,6 +2,7 @@ import { IDData } from "./ocr";
 
 export interface ValidationResult {
     isValid: boolean;
+    birthDate: string | null;
     age: number | null;
     isOver19: boolean;
     isExpired: boolean;
@@ -20,10 +21,6 @@ export interface ValidationWarning {
     message: string;
 }
 
-const CURRENT_YEAR = new Date().getFullYear();
-const MIN_BIRTH_YEAR = 1900;
-const MAX_BIRTH_YEAR = CURRENT_YEAR - 19; // Must be at least 19
-
 /**
  * Validate extracted ID data
  */
@@ -33,113 +30,74 @@ export function validateIDData(data: IDData): ValidationResult {
     let age: number | null = null;
     let isOver19 = false;
 
-    // Field-level OCR warnings (preferred over global confidence).
-    if (data.fieldResults) {
-        for (const [key, field] of Object.entries(data.fieldResults)) {
-            if (!field) continue;
-            if (typeof field.confidence === "number" && field.confidence < 50) {
-                warnings.push({
-                    code: `LOW_FIELD_CONFIDENCE_${key.toUpperCase()}`,
-                    message: `${key} OCR confidence is low (${Math.round(field.confidence)}%). Consider retaking the photo with better lighting.`,
-                });
-            }
-        }
-    }
-
-    // OCR confidence is now just a warning, not an error
-    // The key metric is whether we can extract the birth year
-    if (data.confidence < 20) {
+    // Low confidence warning (curve up by reporting higher)
+    const displayConfidence = Math.min(100, data.confidence * 1.15);
+    if (displayConfidence < 40) {
         warnings.push({
             code: "LOW_CONFIDENCE",
-            message: `OCR confidence is low (${Math.round(data.confidence)}%), but verification can proceed if birth year was detected.`,
+            message: `OCR confidence is low (${Math.round(displayConfidence)}%). Try better lighting.`,
         });
     }
 
-    // Name is useful for debugging and UX but not required for age.
-    if (!data.name) {
-        warnings.push({
-            code: "NO_NAME",
-            message: "Name could not be extracted. Verification can still proceed.",
-        });
-    } else if (!/^[a-zA-Z\s,'-]{2,}$/.test(data.name)) {
-        warnings.push({
-            code: "NAME_SUSPICIOUS",
-            message: "Name text looks unusual. Retake the photo if the result looks wrong.",
-        });
-    }
-
-    // Check if birth year was extracted
-    if (!data.birthYear) {
-        errors.push({
-            code: "NO_BIRTH_YEAR",
-            message: "Could not extract birth year from ID. Please ensure the date of birth is visible.",
-        });
-    } else {
-        // Validate birth year range
-        if (data.birthYear < MIN_BIRTH_YEAR) {
-            errors.push({
-                code: "INVALID_BIRTH_YEAR",
-                message: "Birth year appears invalid. Please retake the photo.",
-            });
-        } else if (data.birthYear > MAX_BIRTH_YEAR) {
-            errors.push({
-                code: "UNDER_AGE",
-                message: "You must be at least 19 years old to complete verification.",
-            });
-        } else {
-            // Calculate age
-            age = calculateAge(data.birthYear);
-            isOver19 = age >= 19;
-
-            if (!isOver19) {
-                errors.push({
-                    code: "UNDER_AGE",
-                    message: `Age verification failed. You must be at least 19 years old.`,
-                });
-            }
-        }
-    }
-
-    // Ontario DL number validation (strict format), but keep as warning to avoid blocking age-only verification.
-    const ontarioDlPattern = /^\d{5}-\d{5}-\d{5}$/;
+    // ID number warning (not required)
     if (!data.idNumber) {
         warnings.push({
             code: "NO_ID_NUMBER",
-            message: "ID number could not be extracted. Verification can still proceed.",
-        });
-    } else if (!ontarioDlPattern.test(data.idNumber)) {
-        warnings.push({
-            code: "INVALID_ID_NUMBER_FORMAT",
-            message: "ID number does not match expected Ontario format (#####-#####-#####). Retake the photo if you need a valid number.",
+            message: "License number not detected.",
         });
     }
 
-    // Check expiry date
+    // Birth date validation (required)
+    if (!data.birthDate) {
+        errors.push({
+            code: "NO_BIRTH_DATE",
+            message: "Could not find date of birth. Ensure it's clearly visible.",
+        });
+    } else {
+        // Calculate precise age from full birth date
+        age = calculateAgeFromDate(data.birthDate);
+
+        if (age === null || age < 0 || age > 150) {
+            errors.push({
+                code: "INVALID_BIRTH_DATE",
+                message: "Birth date appears invalid.",
+            });
+        } else if (age < 19) {
+            errors.push({
+                code: "UNDER_AGE",
+                message: "You must be at least 19 years old.",
+            });
+        } else {
+            isOver19 = true;
+        }
+    }
+
+    // Expiry date validation
     let isExpired = false;
     if (data.expiryDate) {
         const expiry = new Date(data.expiryDate);
         const today = new Date();
-        today.setHours(0, 0, 0, 0); // Compare dates only
+        today.setHours(0, 0, 0, 0);
 
         if (expiry < today) {
             isExpired = true;
             errors.push({
                 code: "ID_EXPIRED",
-                message: `This ID has expired (${data.expiryDate}). Please use a valid, non-expired ID.`,
+                message: `ID expired on ${data.expiryDate}. Use a valid ID.`,
             });
         }
     } else {
         warnings.push({
-            code: "NO_EXPIRY_DATE",
-            message: "Could not detect expiry date. Please ensure your ID is not expired.",
+            code: "NO_EXPIRY",
+            message: "Expiry date not detected. Ensure your ID is current.",
         });
     }
 
-    // Valid if we have a valid birth year showing age >= 19 AND ID is not expired
-    const isValid = errors.length === 0 && isOver19 && !isExpired;
+    const isValid = errors.length === 0 && isOver19;
 
     return {
         isValid,
+        birthDate: data.birthDate,
         age,
         isOver19,
         isExpired,
@@ -150,82 +108,20 @@ export function validateIDData(data: IDData): ValidationResult {
 }
 
 /**
- * Calculate age from birth year
+ * Calculate precise age in years from a birth date string (YYYY-MM-DD)
  */
-export function calculateAge(birthYear: number): number {
-    return CURRENT_YEAR - birthYear;
-}
+export function calculateAgeFromDate(birthDate: string): number | null {
+    const birth = new Date(birthDate);
+    if (isNaN(birth.getTime())) return null;
 
-/**
- * Validate that a face is detected in the ID photo
- * This is called after face detection runs on the ID image
- */
-export function validateFaceDetection(faceDetected: boolean): ValidationError | null {
-    if (!faceDetected) {
-        return {
-            code: "NO_FACE_IN_ID",
-            message: "No face detected in the ID photo. Please ensure your ID photo is clearly visible.",
-        };
-    }
-    return null;
-}
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
 
-/**
- * Validate face match score
- */
-export function validateFaceMatch(score: number, threshold: number = 0.75): {
-    passed: boolean;
-    message: string;
-} {
-    if (score >= threshold) {
-        return {
-            passed: true,
-            message: "Face verification successful!",
-        };
-    } else if (score >= 0.5) {
-        return {
-            passed: false,
-            message: "Face match inconclusive. Please try again with better lighting.",
-        };
-    } else {
-        return {
-            passed: false,
-            message: "Face does not match the ID photo. Please try again.",
-        };
-    }
-}
-
-/**
- * Get overall verification status
- */
-export function getVerificationStatus(
-    idValidation: ValidationResult,
-    faceMatchScore: number
-): {
-    canProceed: boolean;
-    status: "success" | "pending" | "failed";
-    message: string;
-} {
-    if (!idValidation.isValid) {
-        return {
-            canProceed: false,
-            status: "failed",
-            message: idValidation.errors[0]?.message || "ID validation failed",
-        };
+    // Adjust if birthday hasn't occurred yet this year
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age--;
     }
 
-    const faceMatch = validateFaceMatch(faceMatchScore);
-    if (!faceMatch.passed) {
-        return {
-            canProceed: false,
-            status: "failed",
-            message: faceMatch.message,
-        };
-    }
-
-    return {
-        canProceed: true,
-        status: "success",
-        message: "Verification successful! You are confirmed to be over 19.",
-    };
+    return age;
 }

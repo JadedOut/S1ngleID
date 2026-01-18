@@ -30,15 +30,6 @@ export function validateIDData(data: IDData): ValidationResult {
     let age: number | null = null;
     let isOver19 = false;
 
-    // Low confidence warning (curve up by reporting higher)
-    const displayConfidence = Math.min(100, data.confidence * 1.15);
-    if (displayConfidence < 40) {
-        warnings.push({
-            code: "LOW_CONFIDENCE",
-            message: `OCR confidence is low (${Math.round(displayConfidence)}%). Try better lighting.`,
-        });
-    }
-
     // ID number warning (not required)
     if (!data.idNumber) {
         warnings.push({

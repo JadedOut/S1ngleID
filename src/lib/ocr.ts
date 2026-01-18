@@ -11,9 +11,6 @@ const CONFIG = {
   /** Contrast enhancement factor (1.4 = 40% boost) */
   CONTRAST_FACTOR: 1.4,
 
-  /** Minimum confidence score to be considered acceptable (0-100) */
-  MIN_CONFIDENCE: 80,
-
   /** Tesseract worker parameters */
   WORKER_PARAMS: {
     tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
@@ -30,7 +27,6 @@ export interface IDData {
   birthDate: string | null; // Full date: YYYY-MM-DD
   expiryDate: string | null;
   rawText: string;
-  confidence: number;
 }
 
 export interface OCRResult {
@@ -133,10 +129,8 @@ export async function extractIDData(
     onProgress?.(20, "Reading document...");
     const result = await tesseract.recognize(processed);
     const text = result.data.text;
-    const confidence = result.data.confidence;
 
     console.log("[OCR] Raw text:", text);
-    console.log("[OCR] Confidence:", confidence);
 
     onProgress?.(80, "Parsing data...");
     const parsed = parseDriverLicense(text);
@@ -148,7 +142,6 @@ export async function extractIDData(
       data: {
         ...parsed,
         rawText: text,
-        confidence,
       },
     };
   } catch (error) {
@@ -164,7 +157,7 @@ export async function extractIDData(
 /**
  * Parse driver's license text to extract fields
  */
-function parseDriverLicense(text: string): Omit<IDData, "rawText" | "confidence"> {
+function parseDriverLicense(text: string): Omit<IDData, "rawText"> {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   console.log("[OCR] Parsing", lines.length, "lines");
 
@@ -407,12 +400,7 @@ function extractExpiryDate(text: string): string | null {
   return null;
 }
 
-/**
- * Check if confidence is acceptable
- */
-export function isConfidenceAcceptable(confidence: number): boolean {
-  return confidence >= 30;
-}
+
 
 /**
  * Clean up OCR worker

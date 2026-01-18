@@ -11,15 +11,13 @@
  * 
  * FaceMatchResult {
  *   isMatch: boolean          - Whether faces match (score >= threshold)
- *   confidence: number        - Match confidence score (0-1)
  *   idFaceDescriptor: Float32Array | null  - Face descriptor from ID photo
  *   selfieFaceDescriptor: Float32Array | null - Face descriptor from selfie
  * }
  * 
  * These fields are used by Phase 5 (WebAuthn) to:
  * 1. Determine if verification should proceed
- * 2. Store confidence level with credential
- * 3. Provide audit trail of matching quality
+ * 2. Provide audit trail of matching quality
  * ============================================================================
  */
 
@@ -34,16 +32,7 @@ const CONFIG = {
      * Matching threshold 
      * Faces must score >= this value to be considered a match 
      */
-    MATCH_THRESHOLD: 0.75,
-
-    /**
-     * 🔧 DEBUG: Confidence boost
-     * Set to a value > 0 to artificially increase match confidence for testing
-     * e.g., 0.15 adds 15% to the final score
-     * 
-     * ⚠️ SET TO 0 FOR PRODUCTION
-     */
-    DEBUG_CONFIDENCE_BOOST: 0.15,
+    MATCH_THRESHOLD: 0.60,
 
     /** Path to face-api.js model files */
     MODELS_PATH: '/models'
@@ -57,11 +46,8 @@ const CONFIG = {
  * Result from face matching operation
  */
 export interface FaceMatchResult {
-    /** Whether faces match (confidence >= MATCH_THRESHOLD) */
+    /** Whether faces match (score >= MATCH_THRESHOLD) */
     isMatch: boolean;
-
-    /** Confidence score (0-1) */
-    confidence: number;
 
     /** Face descriptors for potential future use */
     idFaceDescriptor: Float32Array | null;
@@ -77,7 +63,6 @@ export interface FaceMatchResult {
 export interface FaceDetectionResult {
     success: boolean;
     descriptor: Float32Array | null;
-    confidence: number;
     error?: string;
 }
 
@@ -145,7 +130,6 @@ export async function detectFace(imageData: string): Promise<FaceDetectionResult
         return {
             success: false,
             descriptor: null,
-            confidence: 0,
             error: 'Models not loaded. Call loadFaceApiModels() first.',
         };
     }
@@ -165,24 +149,21 @@ export async function detectFace(imageData: string): Promise<FaceDetectionResult
             return {
                 success: false,
                 descriptor: null,
-                confidence: 0,
                 error: 'No face detected in image',
             };
         }
 
-        console.log('[FaceMatch] Face detected with confidence:', detection.detection.score);
+        console.log('[FaceMatch] Face detected');
 
         return {
             success: true,
             descriptor: detection.descriptor,
-            confidence: detection.detection.score,
         };
     } catch (error) {
         console.error('[FaceMatch] Face detection error:', error);
         return {
             success: false,
             descriptor: null,
-            confidence: 0,
             error: error instanceof Error ? error.message : 'Face detection failed',
         };
     }
@@ -240,22 +221,13 @@ export async function matchFaces(
 
     console.log('[FaceMatch] Distance:', distance, 'Score:', faceApiScore);
 
-    let finalScore = faceApiScore;
-
-    // Apply debug confidence boost (set to 0 in production)
-    if (CONFIG.DEBUG_CONFIDENCE_BOOST > 0) {
-        console.log('[FaceMatch] 🔧 DEBUG: Applying confidence boost of', CONFIG.DEBUG_CONFIDENCE_BOOST);
-        finalScore = Math.min(1, finalScore + CONFIG.DEBUG_CONFIDENCE_BOOST);
-    }
-
-    const isMatch = finalScore >= CONFIG.MATCH_THRESHOLD;
+    const isMatch = faceApiScore >= CONFIG.MATCH_THRESHOLD;
 
     onProgress?.(100, isMatch ? 'Match confirmed!' : 'Faces do not match');
-    console.log('[FaceMatch] Final result:', { isMatch, finalScore, rawScore: finalScore - CONFIG.DEBUG_CONFIDENCE_BOOST });
+    console.log('[FaceMatch] Final result:', { isMatch, faceApiScore });
 
     return {
         isMatch,
-        confidence: finalScore,
         idFaceDescriptor: idFace.descriptor,
         selfieFaceDescriptor: selfieFace.descriptor,
     };
@@ -283,7 +255,6 @@ async function createImageElement(dataUrl: string): Promise<HTMLImageElement> {
 function createErrorResult(error: string): FaceMatchResult {
     return {
         isMatch: false,
-        confidence: 0,
         idFaceDescriptor: null,
         selfieFaceDescriptor: null,
         error,

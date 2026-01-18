@@ -59,19 +59,25 @@ The selfie capture requires camera access. If you see a camera error:
 ```
 src/
 ├── app/
-│   ├── page.tsx         # Landing page
+│   ├── api/ocr/recognize/    # Server-side OCR endpoint
+│   │   └── route.ts
+│   ├── page.tsx              # Landing page
+│   ├── layout.tsx            # Root layout
+│   ├── globals.css           # Global styles
 │   └── verify/
-│       └── page.tsx     # Verification flow
+│       └── page.tsx          # Verification flow
 ├── components/
-│   ├── Camera.tsx       # Webcam capture component
-│   ├── IDUpload.tsx     # ID document upload
-│   └── ProgressIndicator.tsx
+│   ├── Camera.tsx            # Webcam capture component
+│   ├── IDUpload.tsx          # ID document upload
+│   └── ProgressIndicator.tsx # Step progress UI
 ├── lib/
-│   ├── ocr.ts           # Tesseract.js OCR service
-│   ├── faceMatching.ts  # face-api.js matching service
-│   └── validation.ts    # Age validation logic
+│   ├── ocr.ts                # Client-side Tesseract.js OCR
+│   ├── faceMatching.ts       # face-api.js matching service
+│   ├── validation.ts         # Age validation logic
+│   └── server/
+│       └── opencvPreprocessPuppeteer.ts  # Server-side OpenCV preprocessing
 public/
-└── models/              # face-api.js AI models
+└── models/                   # face-api.js AI models
 ```
 
 ## How It Works

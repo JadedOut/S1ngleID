@@ -61,7 +61,7 @@ Instead of a real selfie, the user selects "OBS Virtual Camera" as their media i
 React State (`useState`) determines what is shown on screen.
 **Result:** A user can use React Developer Tools to toggle the `step` from "upload" directly to "success", bypassing all checks.
 
-## Path to Security (Hybrid Approach)
+## Path to Security
 To make this secure while maintaining privacy, we must move the *verification of trust* to a component the user cannot control.
 
 ### Implementation: Server-Side Verification
@@ -71,6 +71,6 @@ Send the data to the server, verify it there, then delete it immediately.
 *   **Cons:** Data leaves the device (even if transiently). Requires server resources.
 
 ## Conclusion
-**Currently, SDUARF is a "Client-Side Demo" or "Honorable Interface".** It prevents accidental errors but provides **zero security** against malicious users.
+**Currently, S1ngleID is a "Client-Side Demo".** It prevents accidental errors but provides **zero security** against malicious users.
 
 To prevent modification, the *decision* ("Is this user 19?") **MUST** happen on a trusted server, which means the raw evidence (Images) or a cryptographic proof of them must be sent to that server.

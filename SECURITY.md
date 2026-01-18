@@ -1,6 +1,5 @@
 # Security & Architecture Overview
 
-## 🚨 Critical
 **Current Status:** Is anything truly done on the backend?
 **Answer:** **NO.**
 
@@ -9,15 +8,15 @@ Currently, the application runs 100% on the client-side (in the user's browser).
 ## The "Trusting the Client" Vulnerability
 Because all logic executes in the user's browser, the user (the "client") has complete control over the execution environment. A motivated user with technical knowledge can modify **any** data field or logic flow listed below.
 
-### 🔓 User-Modifiable Data Fields
+### User-Modifiable Data Fields
 The following fields exist in the browser's memory (RAM) and can be modified using Browser DevTools, Console injection, or Network interception.
 
 #### 1. Input Data
 | Field | Modifiable? | Method |
 |-------|-------------|--------|
-| `idImage` | ✅ YES | Can inject base64 string, bypass camera, upload edited photo |
-| `selfieImage` | ✅ YES | Can inject pre-recorded video frame, bypass liveness check |
-| `Camera Video Stream` | ✅ YES | Can use "Virtual Webcam" software (OBS) to feed fake video |
+| `idImage` | YES | Can inject base64 string, bypass camera, upload edited photo |
+| `selfieImage` | YES | Can inject pre-recorded video frame, bypass liveness check |
+| `Camera Video Stream` | YES | Can use "Virtual Webcam" software (OBS) to feed fake video |
 
 #### 2. OCR Extraction Logic (`ocr.ts`)
 | Field | Internal Name | Vulnerability |

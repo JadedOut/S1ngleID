@@ -1,6 +1,6 @@
-# Security & Architecture Audit
+# Security & Architecture Overview
 
-## 🚨 Critical Architecture Finding
+## 🚨 Critical
 **Current Status:** Is anything truly done on the backend?
 **Answer:** **NO.**
 
@@ -65,19 +65,7 @@ React State (`useState`) determines what is shown on screen.
 ## Path to Security (Hybrid Approach)
 To make this secure while maintaining privacy, we must move the *verification of trust* to a component the user cannot control.
 
-### Option 1: Zero-Knowledge Proofs (Advanced, True Privacy)
-The client generates a mathematical proof that "I have run this specific code on this specific data and the result is True", without revealing the data. The server verifies the proof.
-*   *Pros:* High privacy, high security.
-*   *Cons:* Extremely complex implementation (zk-SNARKs).
-
-### Option 2: Trusted Execution Environment / WebAuthn (Planned Phase 5)
-Use the device's secure hardware (Secure Enclave / TPM) to sign the result.
-*   **How it works:** 
-    1. App uses WebAuthn to generate a key pair in the device's hardware.
-    2. The *attestation* proves the key comes from a real device (not a script).
-    3. **Problem:** WebAuthn proves *user presence* and *device authenticity*, but it doesn't prove that the *OCR code* found a valid date. The Javascript calling `navigator.credentials.create()` is still modifiable.
-
-### Option 3: Server-Side Verification (Standard)
+### Implementation: Server-Side Verification
 Send the data to the server, verify it there, then delete it immediately.
 *   **Flow:** Client Uploads ID/Selfie -> Server OCRs & Matches -> Server returns Token -> Server deletes images.
 *   **Pros:** Secure. User cannot spoof the server's execution.

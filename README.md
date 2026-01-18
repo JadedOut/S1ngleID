@@ -1,13 +1,14 @@
 # SDUARF - Age Verification App
 
-A privacy-first age verification web application that processes ID documents and performs face matching entirely on the client-side.
+A privacy-first age verification web application that processes ID documents, performs face matching, and issues WebAuthn credentials for future authentication.
 
-## Conceptual Features
+## Features
 
 - **Privacy-First**: All processing (OCR, face matching) happens in your browser
 - **ID Document OCR**: Extracts date of birth, expiry date, and license number
 - **Live Face Matching**: Compares your selfie with your ID photo using AI
-- **No Server Storage**: Your ID data never leaves your device
+- **WebAuthn Credentials**: Creates passkeys (FaceID/TouchID) for future verification
+- **Split Deployment**: Frontend on Vercel, backend with Puppeteer OCR on Railway/Render
 
 ## Prerequisites
 
@@ -58,21 +59,32 @@ The selfie capture requires camera access. If you see a camera error:
 ## Project Structure
 
 ```
+prisma/
+└── schema.prisma         # Database schema (User, Challenge, Credential)
 src/
 ├── app/
-│   ├── page.tsx         # Landing page
+│   ├── api/
+│   │   ├── ocr/recognize/route.ts    # OCR endpoint
+│   │   └── verify/
+│   │       ├── start/route.ts        # WebAuthn registration start
+│   │       └── complete/route.ts     # WebAuthn registration complete
+│   ├── page.tsx          # Landing page
 │   └── verify/
-│       └── page.tsx     # Verification flow
+│       └── page.tsx      # Verification flow
 ├── components/
-│   ├── Camera.tsx       # Webcam capture component
-│   ├── IDUpload.tsx     # ID document upload
+│   ├── Camera.tsx        # Webcam capture component
+│   ├── IDUpload.tsx      # ID document upload
 │   └── ProgressIndicator.tsx
 ├── lib/
-│   ├── ocr.ts           # Tesseract.js OCR service
-│   ├── faceMatching.ts  # face-api.js matching service
-│   └── validation.ts    # Age validation logic
+│   ├── server/
+│   │   ├── prisma.ts     # Prisma client singleton
+│   │   ├── cors.ts       # CORS utilities
+│   │   └── dobExtractor.ts  # DOB extraction from OCR
+│   ├── ocr.ts            # Tesseract.js OCR service
+│   ├── faceMatching.ts   # face-api.js matching service
+│   └── validation.ts     # Age validation logic
 public/
-└── models/              # face-api.js AI models
+└── models/               # face-api.js AI models
 ```
 
 ## How It Works
@@ -81,8 +93,10 @@ public/
 2. **OCR Processing**: Tesseract.js extracts your date of birth
 3. **Age Validation**: Confirms you're 19+ and ID isn't expired
 4. **Take Selfie**: Live camera capture (cannot be faked with photo)
-5. **Face Match**: AI compares your selfie with ID photo
-6. **Verified**: Success if face match confidence >= 75%
+5. **Face Match**: AI compares your selfie with ID photo (requires >= 75% confidence)
+6. **Server Verification**: Backend re-validates age from OCR
+7. **WebAuthn Registration**: Create a passkey (FaceID/TouchID) for future logins
+8. **Complete**: ID photos are deleted from memory; credential ID is stored in database
 
 ## Data Flow & Field Storage
 
@@ -135,6 +149,59 @@ All data is stored **in-memory only** (React state) and never persisted to disk 
 - **face-api.js** - Face detection and matching
 - **TensorFlow.js** - AI model runtime
 - **Tailwind CSS** - Styling
+- **Prisma** - Database ORM (PostgreSQL)
+- **SimpleWebAuthn** - WebAuthn/Passkey implementation
+- **Puppeteer** - Server-side OpenCV preprocessing
+
+## Deployment (Split Architecture)
+
+This app uses a split deployment for optimal performance:
+- **Frontend (Vercel)**: Static Next.js app with client-side processing
+- **Backend (Railway/Render)**: API routes with Puppeteer for OCR preprocessing
+
+### Environment Variables
+
+Copy `.env.example` to `.env.local` and configure:
+
+```bash
+# Database (Railway PostgreSQL)
+DATABASE_URL="postgresql://..."
+
+# WebAuthn Configuration
+WEBAUTHN_RP_ID="your-app.vercel.app"       # Your frontend domain
+WEBAUTHN_ORIGIN="https://your-app.vercel.app"
+WEBAUTHN_RP_NAME="Age Verification"
+
+# Frontend env (for split deployment)
+NEXT_PUBLIC_BACKEND_URL="https://your-backend.railway.app"
+```
+
+### Database Setup
+
+```bash
+# Generate Prisma client
+npx prisma generate
+
+# Push schema to database
+npx prisma db push
+
+# (Optional) Open Prisma Studio
+npx prisma studio
+```
+
+### Vercel Deployment
+
+1. Connect your GitHub repo to Vercel
+2. Set `NEXT_PUBLIC_BACKEND_URL` to your Railway/Render URL
+3. Deploy
+
+### Railway/Render Deployment
+
+1. Connect your GitHub repo
+2. Set all environment variables (DATABASE_URL, WEBAUTHN_*)
+3. Deploy
+
+Note: Puppeteer requires a Node.js environment with Chrome. Railway and Render support this out of the box.
 
 ## Browser Support
 
@@ -149,10 +216,11 @@ All data is stored **in-memory only** (React state) and never persisted to disk 
 
 ## Privacy
 
-- All processing happens in your browser
-- No images are sent to any server
-- ID data is stored only in memory during the session
-- Data is automatically cleared when you close the page
+- Face matching happens entirely in your browser
+- ID photos are sent to the server only for OCR verification, then deleted from memory
+- No ID images are stored on the server
+- WebAuthn credentials use your device's secure enclave (biometrics never leave your device)
+- Only your credential ID is stored in the database for future authentication
 
 ## License
 

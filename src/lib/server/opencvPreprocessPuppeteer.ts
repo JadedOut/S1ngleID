@@ -40,6 +40,11 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
 <script>
 let openCvReadyPromise = null;
 
+// Reset OpenCV promise when page is reused (to avoid stuck promises)
+function resetOpenCvPromise() {
+  openCvReadyPromise = null;
+}
+
 function getCvFromWindow() {
   return window.cv ?? null;
 }
@@ -107,26 +112,61 @@ function ensureOpenCvReady() {
         return;
       }
 
-      if (typeof cv.onRuntimeInitialized === "function") {
-        const prev = cv.onRuntimeInitialized;
-        cv.onRuntimeInitialized = () => {
-          try { prev(); } catch {}
-          console.log("[OpenCV] Runtime initialized successfully");
-          resolve(cv);
-        };
-      } else {
-        cv.onRuntimeInitialized = () => {
-          console.log("[OpenCV] Runtime initialized successfully");
-          resolve(cv);
-        };
+      // Check if OpenCV is already initialized (race condition: might initialize before we set callback)
+      if (isCvReady(cv)) {
+        console.log("[OpenCV] OpenCV already initialized (immediate check)");
+        resolve(cv);
+        return;
       }
 
+      // Set up callback for when runtime initializes
+      const originalCallback = cv.onRuntimeInitialized;
+      cv.onRuntimeInitialized = () => {
+        try { 
+          if (originalCallback) originalCallback(); 
+        } catch (e) {
+          console.warn("[OpenCV] Original callback error:", e);
+        }
+        console.log("[OpenCV] Runtime initialized callback fired");
+        const isReady = isCvReady(cv);
+        console.log("[OpenCV] isCvReady check in callback: " + isReady);
+        console.log("[OpenCV] cv.Mat exists: " + !!cv.Mat);
+        console.log("[OpenCV] cv.imread exists: " + !!cv.imread);
+        console.log("[OpenCV] cv.cvtColor exists: " + !!cv.cvtColor);
+        if (isReady) {
+          console.log("[OpenCV] Resolving promise from callback");
+          resolve(cv);
+        } else {
+          console.log("[OpenCV] cv not ready in callback, waiting for poll...");
+          // Don't reject here - let polling continue
+        }
+      };
+
+      // Also poll as backup (in case callback doesn't fire)
+      let pollCount = 0;
+      const maxPolls = 1200; // 60 seconds max (50ms * 1200)
+      let resolved = false;
       const check = () => {
+        if (resolved) return;
+        pollCount++;
         const cv2 = getCvFromWindow();
-        if (cv2 && isCvReady(cv2)) {
-          console.log("[OpenCV] OpenCV ready (immediate check)");
+        const isReady = cv2 && isCvReady(cv2);
+        if (pollCount % 100 === 0) {
+          console.log("[OpenCV] Poll #" + pollCount + ", cv exists: " + !!cv2 + ", ready: " + isReady);
+        }
+        if (isReady) {
+          resolved = true;
+          console.log("[OpenCV] OpenCV ready (poll check #" + pollCount + ")");
           resolve(cv2);
-        } else setTimeout(check, 50);
+        } else if (pollCount < maxPolls) {
+          setTimeout(check, 50);
+        } else {
+          console.log("[OpenCV] Poll timeout - cv exists: " + !!cv2);
+          if (cv2) {
+            console.log("[OpenCV] Functions at timeout - Mat:" + !!cv2.Mat + " imread:" + !!cv2.imread + " cvtColor:" + !!cv2.cvtColor);
+          }
+          reject(new Error("OpenCV initialization timeout after polling"));
+        }
       };
       check();
     };
@@ -366,6 +406,7 @@ async function preprocessOntarioDlToPng(imageDataUrl) {
 
 window.preprocessOntarioDlToPng = preprocessOntarioDlToPng;
 window.ensureOpenCvReady = ensureOpenCvReady;
+window.resetOpenCvPromise = resetOpenCvPromise;
 
 console.log("[OpenCV] Preprocessing page loaded, functions exposed globally");
 <\/script>
@@ -444,6 +485,16 @@ async function acquirePage(): Promise<Page> {
   while (pagePool.length > 0) {
     const page = pagePool.pop()!;
     if (!page.isClosed()) {
+      // Reset OpenCV promise for reused pages (to avoid stuck promises)
+      await page.evaluate(() => {
+        // Reset the promise variable directly in browser context
+        if (typeof openCvReadyPromise !== 'undefined') {
+          openCvReadyPromise = null;
+        }
+        if (typeof window.resetOpenCvPromise === 'function') {
+          window.resetOpenCvPromise();
+        }
+      }).catch(() => {}); // Ignore errors
       pagesInUse.add(page);
       return page;
     }
@@ -477,11 +528,46 @@ async function acquirePage(): Promise<Page> {
 
   // Wait for OpenCV.js to load and be ready
   console.log("[Puppeteer] Waiting for OpenCV.js to load...");
-  await page.evaluate(async () => {
-    // @ts-ignore - window.ensureOpenCvReady is defined in the HTML
-    await window.ensureOpenCvReady();
-  });
-  console.log("[Puppeteer] OpenCV.js loaded and ready");
+  
+  // #region agent log
+  const fs = require('fs');
+  const logPath = 'c:\\Users\\jiami\\OneDrive\\Desktop\\workspace\\kms_please\\sduarf\\.cursor\\debug.log';
+  fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:480',message:'About to evaluate ensureOpenCvReady',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'A'})+'\n');
+  // #endregion
+  
+  const opencvStartTime = Date.now();
+  try {
+    // Use a clearable timeout to avoid race condition where timeout fires after evaluate completes
+    let timeoutId: NodeJS.Timeout | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        console.log("[Puppeteer] OpenCV timeout triggered after 90s");
+        reject(new Error('OpenCV initialization timeout after 90s'));
+      }, 90000); // Increased to 90s to give more buffer
+    });
+    
+    const evaluatePromise = page.evaluate(async () => {
+      // @ts-ignore - window.ensureOpenCvReady is defined in the HTML
+      await window.ensureOpenCvReady();
+    }).then(() => {
+      // Clear timeout as soon as evaluate completes
+      if (timeoutId) clearTimeout(timeoutId);
+      console.log("[Puppeteer] OpenCV evaluate completed, timeout cleared");
+    });
+    
+    await Promise.race([evaluatePromise, timeoutPromise]);
+    
+    // #region agent log
+    fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:493',message:'ensureOpenCvReady completed',data:{elapsedMs:Date.now()-opencvStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'A'})+'\n');
+    // #endregion
+    
+    console.log("[Puppeteer] OpenCV.js loaded and ready");
+  } catch (error) {
+    // #region agent log
+    fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:498',message:'ensureOpenCvReady failed',data:{error:error instanceof Error ? error.message : String(error),elapsedMs:Date.now()-opencvStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'A'})+'\n');
+    // #endregion
+    throw error;
+  }
 
   pagesInUse.add(page);
   return page;
@@ -538,13 +624,49 @@ export async function preprocessIdDocumentPuppeteer(
   const startTime = Date.now();
   console.log("[Puppeteer] Starting preprocessing...");
 
+  // #region agent log
+  const fs = require('fs');
+  const logPath = 'c:\\Users\\jiami\\OneDrive\\Desktop\\workspace\\kms_please\\sduarf\\.cursor\\debug.log';
+  try {
+    fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:538',message:'preprocessIdDocumentPuppeteer called',data:{imageDataUrlLength:imageDataUrl?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
+  } catch {}
+  // #endregion
+
   let page: Page | null = null;
 
   try {
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:547',message:'About to acquire page',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
+    } catch {}
+    // #endregion
+    
     page = await acquirePage();
+    
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:552',message:'Page acquired, about to evaluate preprocessing',data:{pageIsClosed:page?.isClosed()},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
+    } catch {}
+    // #endregion
 
     // Run the preprocessing function in the browser context
-    const result = await page.evaluate(
+    // #region agent log
+    const evalStartTime = Date.now();
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:556',message:'About to evaluate preprocessOntarioDlToPng',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
+    } catch {}
+    // #endregion
+    
+    // Use clearable timeout to avoid race condition
+    let preprocessTimeoutId: NodeJS.Timeout | null = null;
+    const preprocessTimeoutPromise = new Promise<never>((_, reject) => {
+      preprocessTimeoutId = setTimeout(() => {
+        console.log("[Puppeteer] Preprocessing timeout triggered after 60s");
+        reject(new Error('Preprocessing timeout after 60s'));
+      }, 60000); // 60s should be plenty for preprocessing
+    });
+    
+    const preprocessEvaluatePromise = page.evaluate(
       async (imageData: string) => {
         // @ts-ignore - window.preprocessOntarioDlToPng is defined in the HTML
         const { preprocessedPngDataUrl, rectifiedPngDataUrl } =
@@ -552,7 +674,19 @@ export async function preprocessIdDocumentPuppeteer(
         return { preprocessedPngDataUrl, rectifiedPngDataUrl };
       },
       imageDataUrl
-    );
+    ).then((res) => {
+      if (preprocessTimeoutId) clearTimeout(preprocessTimeoutId);
+      console.log("[Puppeteer] Preprocessing evaluate completed, timeout cleared");
+      return res;
+    });
+    
+    const result = await Promise.race([preprocessEvaluatePromise, preprocessTimeoutPromise]) as { preprocessedPngDataUrl: string; rectifiedPngDataUrl: string };
+    
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'opencvPreprocessPuppeteer.ts:571',message:'Preprocessing evaluation completed',data:{elapsedMs:Date.now()-evalStartTime,hasResult:!!result},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'A'})+'\n');
+    } catch {}
+    // #endregion
 
     // Convert data URLs to Buffers
     const preprocessedBuffer = base64DataUrlToBuffer(result.preprocessedPngDataUrl);

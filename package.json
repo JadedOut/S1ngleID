@@ -9,13 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@prisma/client": "^5.10.0",
+    "@prisma/client": "^5.22.0",
     "@simplewebauthn/browser": "^9.0.1",
     "@simplewebauthn/server": "^9.0.3",
     "@tensorflow/tfjs": "^4.17.0",
     "face-api.js": "^0.22.2",
     "next": "14.2.21",
-    "prisma": "^5.10.0",
+    "pg": "^8.17.1",
     "puppeteer": "^24.35.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -31,6 +31,7 @@
     "eslint": "^8.56.0",
     "eslint-config-next": "14.2.21",
     "postcss": "^8.4.33",
+    "prisma": "^5.22.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"
   }

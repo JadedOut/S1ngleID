@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from 'react';
-import { verifyAgeWithPasskey, hasAgePasskey } from '@/lib/webauthn-client';
+import { verifyAgeWithPasskey, hasAgePasskey, resetAgePasskey } from '@/lib/webauthn-client';
 import { useRouter } from 'next/navigation';
 
 export default function DemoCasinoPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [ageVerified, setAgeVerified] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [message, setMessage] = useState('');
 
   const handleVerifyAge = async () => {
+    // 1. Check Local Storage ("The Store")
     if (!hasAgePasskey()) {
       setMessage('No passkey found. Redirecting to setup...');
       setTimeout(() => router.push('/setup-passkey'), 1500);
@@ -22,11 +21,13 @@ export default function DemoCasinoPage() {
     setVerifying(true);
     setMessage('Verifying age with passkey...');
 
+    // 2. Trigger "The Fetch" + Windows Hello
     const result = await verifyAgeWithPasskey();
 
     if (result.verified) {
-      setMessage('✅ Age verified! Welcome to Lucky777 Casino!');
+      // 3. Simple State Update (No Login Form anymore)
       setAgeVerified(true);
+      setMessage(''); // Clear verifying message
     } else {
       setMessage(`❌ Verification failed: ${result.error}`);
     }
@@ -34,13 +35,12 @@ export default function DemoCasinoPage() {
     setVerifying(false);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ageVerified) {
-      setMessage('⚠️ Please verify your age first');
-      return;
-    }
-    setMessage('✅ Logged in successfully! (Demo)');
+  const handleReset = () => {
+    resetAgePasskey(); // Clears localStorage
+    setAgeVerified(false);
+    setMessage('Passkey cleared. You can verify again.');
+    // Optional: Redirect to setup if they need to create a new one
+    // router.push('/setup-passkey'); 
   };
 
   return (
@@ -54,8 +54,17 @@ export default function DemoCasinoPage() {
               Lucky777 Casino
             </h1>
           </div>
-          <div className="text-yellow-300 text-sm">
-            🔞 21+ Only
+          <div className="flex items-center gap-4">
+            <div className="text-yellow-300 text-sm">
+              🔞 21+ Only
+            </div>
+            <button
+              onClick={handleReset}
+              className="text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 px-3 py-1.5 rounded border border-red-500/30 transition backdrop-blur-md"
+              title="Clear Passkey & Reset"
+            >
+              🔄 Reset
+            </button>
           </div>
         </div>
       </header>
@@ -94,11 +103,10 @@ export default function DemoCasinoPage() {
               </button>
 
               {message && (
-                <div className={`mt-4 p-3 rounded-lg text-sm ${
-                  message.includes('✅') 
-                    ? 'bg-green-900/50 text-green-200 border border-green-500/30' 
-                    : 'bg-red-900/50 text-red-200 border border-red-500/30'
-                }`}>
+                <div className={`mt-4 p-3 rounded-lg text-sm ${message.includes('✅')
+                  ? 'bg-green-900/50 text-green-200 border border-green-500/30'
+                  : 'bg-red-900/50 text-red-200 border border-red-500/30'
+                  }`}>
                   {message}
                 </div>
               )}
@@ -117,58 +125,33 @@ export default function DemoCasinoPage() {
             </>
           ) : (
             <>
-              <div className="text-center mb-6">
+              <div className="text-center mb-8">
                 <div className="text-6xl mb-4">🎉</div>
-                <h2 className="text-2xl font-bold text-white mb-2">
-                  Age Verified!
+                <h2 className="text-3xl font-bold text-white mb-2">
+                  Logged In
                 </h2>
-                <p className="text-green-300 text-sm">
-                  Welcome to Lucky777 Casino
+                <p className="text-green-300 text-lg">
+                  Welcome back, Player!
                 </p>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="block text-yellow-300 text-sm font-semibold mb-2">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    required
-                    className="w-full px-4 py-3 rounded-lg bg-black/30 border border-yellow-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
-                  />
-                </div>
+              <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-6 mb-8 text-center">
+                <p className="text-green-100 mb-2">
+                  ✅ Age Verified via Windows Hello
+                </p>
+                <p className="text-xs text-gray-400">
+                  Secure passkey authentication used.
+                </p>
+              </div>
 
-                <div>
-                  <label className="block text-yellow-300 text-sm font-semibold mb-2">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full px-4 py-3 rounded-lg bg-black/30 border border-yellow-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
-                  />
-                </div>
-
+              <div className="space-y-4">
                 <button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-lg font-bold hover:from-green-600 hover:to-emerald-600 transition"
+                  onClick={() => alert('Starting Game... (Demo)')}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-lg font-bold hover:from-green-600 hover:to-emerald-600 transition shadow-lg shadow-green-900/20"
                 >
-                  Login & Play
+                  🎰 Play Slots
                 </button>
-              </form>
-
-              {message && message.includes('Logged in') && (
-                <div className="mt-4 p-3 rounded-lg bg-green-900/50 text-green-200 border border-green-500/30 text-sm text-center">
-                  {message}
-                </div>
-              )}
+              </div>
             </>
           )}
         </div>

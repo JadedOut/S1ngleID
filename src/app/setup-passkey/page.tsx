@@ -18,15 +18,27 @@ export default function SetupPasskeyPage() {
     setLoading(true);
     setMessage('Creating your age verification passkey...');
 
-    const result = await createAgePasskey();
+    try {
+      // CLEAR DB first to avoid confusion? No, that might be annoying.
+      // But we should verify the creation was verified by the server.
+      const result = await createAgePasskey();
 
-    if (result.success) {
-      setMessage('✅ Passkey created successfully! Redirecting...');
-      setTimeout(() => {
-        router.push('/demo-casino');
-      }, 2000);
-    } else {
-      setMessage(`❌ Error: ${result.error}`);
+      if (result.success) {
+        console.log('✅ PASSKEY CREATED! ID:', result.passkey_id);
+        setMessage('✅ Passkey created successfully! Logging you in...');
+
+        // Auto-login/redirect
+        setTimeout(() => {
+          router.push('/demo-casino?verified=true'); // Pass flag to auto-show logged in state
+        }, 1500);
+      } else {
+        console.error('❌ Creation failed:', result.error);
+        setMessage(`❌ Error: ${result.error}`);
+        setLoading(false);
+      }
+    } catch (e: any) {
+      console.error('Handler error:', e);
+      setMessage(`❌ Error: ${e.message}`);
       setLoading(false);
     }
   };
@@ -85,17 +97,29 @@ export default function SetupPasskeyPage() {
         </button>
 
         {message && (
-          <div className={`mt-4 p-4 rounded-lg ${
-            message.includes('✅') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-          }`}>
+          <div className={`mt-4 p-4 rounded-lg ${message.includes('✅') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+            }`}>
             <p className="text-sm">{message}</p>
           </div>
         )}
 
         <div className="mt-6 text-center">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 mb-4">
             🔒 Privacy-first • Zero data storage • Client-side only
           </p>
+
+          <button
+            onClick={async () => {
+              if (confirm('Are you sure you want to delete ALL passkeys from the database? This cannot be undone.')) {
+                await fetch('/api/passkey/reset', { method: 'POST' });
+                alert('Database cleared. Now also run "localStorage.clear()" in your console.');
+                window.location.reload();
+              }
+            }}
+            className="text-xs text-red-400 hover:text-red-300 underline"
+          >
+            [DEBUG] Reset Database
+          </button>
         </div>
       </div>
     </div>

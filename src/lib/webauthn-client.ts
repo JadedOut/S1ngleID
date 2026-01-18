@@ -3,110 +3,128 @@ import {
   startAuthentication,
 } from '@simplewebauthn/browser';
 
-// Create passkey immediately (skip OCR for demo)
+// ==========================================
+// 1. THE STORE: Local Storage Management
+// ==========================================
+
+const KEY_STORAGE_NAME = 'age_verify_passkey_id';
+
+function saveKeyId(id: string) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(KEY_STORAGE_NAME, id);
+    console.log(`[STORE] Saved key ID: ${id}`);
+  }
+}
+
+function getKeyId(): string | null {
+  if (typeof window !== 'undefined') {
+    const id = localStorage.getItem(KEY_STORAGE_NAME);
+    console.log(`[FETCH] Retrieved key ID: ${id}`);
+    return id;
+  }
+  return null;
+}
+
+export function hasAgePasskey(): boolean {
+  return !!getKeyId();
+}
+
+export function resetAgePasskey() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(KEY_STORAGE_NAME);
+    console.log('[RESET] Key ID cleared from storage');
+  }
+}
+
+// ==========================================
+// 2. REGISTRATION (Create & Store)
+// ==========================================
+
 export async function createAgePasskey() {
   try {
-    console.log('Calling /api/passkey/create...');
-    const response = await fetch('/api/passkey/create', {
-      method: 'POST',
-    });
+    console.log('--- START REGISTRATION ---');
 
-    console.log('Response status:', response.status);
+    // 1. Get options from server
+    const resp = await fetch('/api/passkey/create', { method: 'POST' });
+    const options = await resp.json();
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      console.error('API Error:', errorData);
-      throw new Error(errorData.reason || errorData.error || 'Failed to start passkey creation');
-    }
+    // 2. Create credentials (Windows Hello Prompt)
+    // FORCE it to be platform (Windows Hello) via optionsJSON
+    const registrationResponse = await startRegistration({ optionsJSON: options });
 
-    const challengeData = await response.json();
-    console.log('Challenge data received');
-
-    // This will trigger Windows Hello / Touch ID / Face ID
-    console.log('Prompting for biometric authentication...');
-    const registrationResponse = await startRegistration(challengeData);
-    
-    console.log('Registration response received');
-
-    const completeResponse = await fetch('/api/passkey/complete', {
+    // 3. Send to server to verify & save
+    const completeResp = await fetch('/api/passkey/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        registrationResponse, // Send the whole response object
-      }),
+      body: JSON.stringify({ registrationResponse }),
     });
 
-    if (!completeResponse.ok) {
-      const errorData = await completeResponse.json().catch(() => ({ error: 'Unknown error' }));
-      console.error('Complete API Error:', errorData);
-      throw new Error('Failed to complete passkey creation');
-    }
+    if (!completeResp.ok) throw new Error('Registration failed on server');
 
-    const { passkey_id } = await completeResponse.json();
-    
-    localStorage.setItem('age_passkey_id', passkey_id);
+    const result = await completeResp.json();
 
-    return { success: true, passkey_id };
-  } catch (error: any) {
-    console.error('Passkey creation failed:', error);
-    return { success: false, error: error.message };
+    // 4. CRITICAL: STORE THE ID
+    // We explicitly save the ID so we can ask for it specifically later
+    saveKeyId(result.passkey_id);
+
+    console.log('--- REGISTRATION SUCCESS ---');
+    return { success: true };
+
+  } catch (e: any) {
+    console.error('Registration failed:', e);
+    return { success: false, error: e.message };
   }
 }
 
-// Verify age using passkey
+// ==========================================
+// 3. VERIFICATION (Fetch & Login)
+// ==========================================
+
 export async function verifyAgeWithPasskey() {
   try {
-    const passkey_id = localStorage.getItem('age_passkey_id');
-    
-    if (!passkey_id) {
-      throw new Error('No passkey found. Please create one first.');
-    }
+    console.log('--- START VERIFICATION ---');
 
-    const startResponse = await fetch('/api/passkey/verify', {
+    // 1. FETCH THE ID
+    const passkeyId = getKeyId();
+    if (!passkeyId) throw new Error('No passkey ID found in Local Storage');
+
+    // 2. Ask server for challenge for THIS SPECIFIC KEY
+    const resp = await fetch('/api/passkey/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passkey_id }),
+      body: JSON.stringify({ passkey_id: passkeyId }), // explicitly sending ID
     });
 
-    if (!startResponse.ok) {
-      throw new Error('Failed to start verification');
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Server rejected verify init');
     }
 
-    const challengeData = await startResponse.json();
+    const options = await resp.json();
 
-    // This will trigger Windows Hello / Touch ID / Face ID
-    console.log('Prompting for biometric authentication...');
-    const authResponse = await startAuthentication(challengeData);
+    // 3. Windows Hello Prompt
+    // It will ONLY ask for the specific key we sent (details in server route)
+    const authResponse = await startAuthentication({ optionsJSON: options });
 
-    const verifyResponse = await fetch('/api/passkey/confirm', {
+    // 4. Final Confirmation
+    const confirmResp = await fetch('/api/passkey/confirm', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        passkey_id,
-        authResponse,
+        passkey_id: passkeyId, // Send ID again for lookup
+        authResponse
       }),
     });
 
-    if (!verifyResponse.ok) {
-      throw new Error('Verification failed');
-    }
+    if (!confirmResp.ok) throw new Error('Verification failed on server');
 
-    const result = await verifyResponse.json();
-    
+    const result = await confirmResp.json();
+
+    console.log('--- VERIFICATION SUCCESS ---');
     return result;
-  } catch (error: any) {
-    console.error('Age verification failed:', error);
-    return { verified: false, error: error.message };
+
+  } catch (e: any) {
+    console.error('Check failed:', e);
+    return { verified: false, error: e.message };
   }
-}
-
-// Check if user has passkey
-export function hasAgePasskey(): boolean {
-  return !!localStorage.getItem('age_passkey_id');
-}
-
-// Reset passkey (for testing/demo purposes)
-export function resetAgePasskey(): void {
-  localStorage.removeItem('age_passkey_id');
-  console.log('Passkey reset! Refresh the page to set up a new one.');
 }

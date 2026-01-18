@@ -7,36 +7,36 @@ export async function POST(req: NextRequest) {
   try {
     const { passkey_id } = await req.json();
 
-    const passkey = await prisma.credential.findUnique({
-      where: { id: passkey_id },
-    });
-
-    if (!passkey) {
-      return NextResponse.json(
-        { error: 'Passkey not found' },
-        { status: 404 }
-      );
+    if (!passkey_id) {
+      return NextResponse.json({ error: 'Missing passkey_id (Cannot fetch key)' }, { status: 400 });
     }
 
+    // 1. FETCH: Look up the specific key
+    const credential = await prisma.credential.findUnique({
+      where: { id: passkey_id }
+    });
+
+    if (!credential) {
+      return NextResponse.json({ error: 'Key not found in database' }, { status: 404 });
+    }
+
+    // 2. GENERATE: Options for THIS key only
     const options = await generateAuthenticationOptions({
       rpID: process.env.NEXT_PUBLIC_RP_ID || 'localhost',
       allowCredentials: [{
-        id: Buffer.from(passkey.credentialId, 'base64'),
-        type: 'public-key',
-        transports: ['internal', 'hybrid'],
+        id: credential.credentialId, // base64url string
+        transports: ['internal'],    // FORCE Windows Hello
       }],
       userVerification: 'required',
     });
 
-    await storeChallenge(passkey_id, options.challenge);
+    // Store challenge
+    await storeChallenge(options.challenge, passkey_id);
 
     return NextResponse.json(options);
 
   } catch (error: any) {
-    console.error('Passkey verify error:', error);
-    return NextResponse.json(
-      { error: 'Server error', reason: error.message },
-      { status: 500 }
-    );
+    console.error('Verify init failed:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

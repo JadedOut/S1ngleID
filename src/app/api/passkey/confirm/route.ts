@@ -1,71 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { prisma } from '@/lib/prisma';
-import { getChallenge, deleteChallenge } from '@/lib/challenge-store';
-import type { AuthenticatorDevice } from '@simplewebauthn/server/script/deps';
+import { getChallenge } from '@/lib/challenge-store';
 
 export async function POST(req: NextRequest) {
   try {
-    const { passkey_id, authResponse } = await req.json();
+    const { authResponse, passkey_id } = await req.json();
 
-    const passkey = await prisma.credential.findUnique({
-      where: { id: passkey_id },
+    if (!passkey_id) {
+      return NextResponse.json({ error: 'Missing passkey_id' }, { status: 400 });
+    }
+
+    // 1. FETCH CREDENTIAL
+    const credential = await prisma.credential.findUnique({
+      where: { id: passkey_id }
     });
 
-    if (!passkey) {
-      return NextResponse.json(
-        { error: 'Passkey not found' },
-        { status: 404 }
-      );
+    if (!credential) {
+      return NextResponse.json({ error: 'Passkey not found in DB' }, { status: 404 });
     }
 
-    const expectedChallenge = await getChallenge(passkey_id);
+    // 2. VERIFY CHALLENGE
+    const clientDataJSON = JSON.parse(
+      Buffer.from(authResponse.response.clientDataJSON, 'base64url').toString('utf-8')
+    );
+    const receivedChallenge = clientDataJSON.challenge;
 
-    if (!expectedChallenge) {
-      return NextResponse.json(
-        { error: 'Challenge not found or expired' },
-        { status: 400 }
-      );
+    // Check if challenge exists for this user/key
+    const storedUserId = await getChallenge(receivedChallenge);
+    if (!storedUserId) {
+      return NextResponse.json({ error: 'Challenge expired or invalid' }, { status: 400 });
     }
 
-    const authenticator: AuthenticatorDevice = {
-      credentialID: Buffer.from(passkey.credentialId, 'base64'),
-      credentialPublicKey: Buffer.from(passkey.publicKey, 'base64'),
-      counter: passkey.counter,
-    };
-
+    // 3. CRYPTOGRAPHIC VERIFICATION
     const verification = await verifyAuthenticationResponse({
       response: authResponse,
-      expectedChallenge,
+      expectedChallenge: receivedChallenge,
       expectedOrigin: process.env.NEXT_PUBLIC_ORIGIN || 'http://localhost:3000',
       expectedRPID: process.env.NEXT_PUBLIC_RP_ID || 'localhost',
-      authenticator,
+      credential: {
+        id: credential.credentialId,
+        publicKey: Uint8Array.from(Buffer.from(credential.publicKey, 'base64')),
+        counter: Number(credential.counter),
+      },
     });
 
     if (!verification.verified) {
-      return NextResponse.json(
-        { verified: false, error: 'Authentication failed' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Verification failed' }, { status: 401 });
     }
 
+    // 4. UPDATE COUNTER
     await prisma.credential.update({
-      where: { id: passkey_id },
-      data: { counter: verification.authenticationInfo.newCounter },
+      where: { id: credential.id },
+      data: { counter: Number(verification.authenticationInfo.newCounter) },
     });
 
-    await deleteChallenge(passkey_id);
-
-    return NextResponse.json({
-      verified: true,
-      over_21: true,
-      user_age_verified: true,
-    });
+    return NextResponse.json({ verified: true, passkey_id: credential.id });
 
   } catch (error: any) {
-    console.error('Passkey confirm error:', error);
+    console.error('Confirm error:', error);
     return NextResponse.json(
-      { verified: false, error: error.message },
+      { error: 'Server error', reason: error.message },
       { status: 500 }
     );
   }

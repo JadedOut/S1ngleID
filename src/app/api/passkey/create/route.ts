@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = `user_${Date.now()}`;
     const userIdBuffer = new TextEncoder().encode(userId);
-    
+
     const options = await generateRegistrationOptions({
       rpName: 'KirksPrivacyPirate Age Verification',
       rpID: process.env.NEXT_PUBLIC_RP_ID || 'localhost',
@@ -14,23 +14,25 @@ export async function POST(req: NextRequest) {
       userName: 'age-verified-user',
       userDisplayName: '21+ Verified User',
       attestationType: 'none',
+
+      // CRITICAL FOR WINDOWS HELLO
       authenticatorSelection: {
-        authenticatorAttachment: 'platform',
+        authenticatorAttachment: 'platform', // Forces Face/Finger/PIN
         userVerification: 'required',
         residentKey: 'preferred',
       },
+
+      excludeCredentials: [],
+      supportedAlgorithmIDs: [-7, -257],
     });
 
-    // Store challenge with the challenge itself as key (simpler!)
+    // Store challenge
     await storeChallenge(options.challenge, userId);
 
     return NextResponse.json(options);
 
   } catch (error: any) {
-    console.error('Passkey create error:', error);
-    return NextResponse.json(
-      { error: 'Server error', reason: error.message },
-      { status: 500 }
-    );
+    console.error('Create init failed:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

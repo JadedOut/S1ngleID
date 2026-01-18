@@ -7,13 +7,13 @@ import { getChallenge, deleteChallenge } from '@/lib/challenge-store';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    
+
     console.log('=== COMPLETE ROUTE START ===');
     console.log('Body keys:', Object.keys(body));
 
     // FIXED: Extract the actual registration response
     const registrationResponse = body.registrationResponse;
-    
+
     console.log('registrationResponse keys:', Object.keys(registrationResponse));
 
     // Extract challenge
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     console.log('Found userId:', userId);
 
     let verification: VerifiedRegistrationResponse;
-    
+
     try {
       verification = await verifyRegistrationResponse({
         response: registrationResponse, // Use the unwrapped response
@@ -56,27 +56,38 @@ export async function POST(req: NextRequest) {
     // Log the structure
     console.log('verification keys:', Object.keys(verification));
     console.log('registrationInfo type:', typeof verification.registrationInfo);
-    
+
     if (verification.registrationInfo) {
       console.log('registrationInfo keys:', Object.keys(verification.registrationInfo));
     }
 
     // CORRECT: Access the credential data from the new structure
-    const { credential, counter } = verification.registrationInfo!;
+    const { credential } = verification.registrationInfo!;
 
     console.log('credentialID type:', typeof credential.id);
+    console.log('credentialID value:', credential.id);
+    console.log('credential counter:', credential.counter);
+
+    // CRITICAL FIX: Store as base64url (not base64) to match browser format
+    // SimpleWebAuthn v10+ returns ID as base64url string, so use it directly
+    const credentialIdBase64Url = credential.id;
+    const publicKeyBase64 = Buffer.from(credential.publicKey).toString('base64');
+
+    console.log('Storing credentialId as base64url:', credentialIdBase64Url);
+    console.log('   (Length: ' + credentialIdBase64Url.length + ')');
 
     const passkey = await prisma.credential.create({
       data: {
-        credentialId: Buffer.from(credential.id).toString('base64'),
-        publicKey: Buffer.from(credential.publicKey).toString('base64'),
-        counter: counter,
+        credentialId: credentialIdBase64Url, // Store as base64url!
+        publicKey: publicKeyBase64,
+        counter: credential.counter, // Use credential.counter
         status: 'verified_over_21',
         issuedAt: new Date(),
       },
     });
 
-    console.log('Passkey created:', passkey.id);
+    console.log('✅ PASSKEY SAVED TO DB:', passkey.id);
+    console.log('   Credential ID:', passkey.credentialId);
     console.log('=== COMPLETE ROUTE END ===');
 
     await deleteChallenge(challenge);

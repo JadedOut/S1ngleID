@@ -8,6 +8,7 @@ const nextConfig = {
                 ...config.resolve.fallback,
                 fs: false,
                 path: false,
+                encoding: false, // Fix for node-fetch dependency in face-api.js
             };
         }
         return config;

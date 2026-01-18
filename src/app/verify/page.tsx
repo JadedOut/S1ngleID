@@ -7,6 +7,7 @@ import IDUpload from "@/components/IDUpload";
 import Camera from "@/components/Camera";
 import { extractIDData, IDData } from "@/lib/ocr";
 import { validateIDData, ValidationResult } from "@/lib/validation";
+import { matchFaces, FaceMatchResult } from "@/lib/faceMatching";
 
 type Step = "upload" | "processing" | "validation" | "selfie" | "matching" | "success" | "error";
 
@@ -22,9 +23,11 @@ export default function VerifyPage() {
     const [idData, setIdData] = useState<IDData | null>(null);
     const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
     const [selfieImage, setSelfieImage] = useState<string | null>(null);
+    const [faceMatchResult, setFaceMatchResult] = useState<FaceMatchResult | null>(null);
     const [processingProgress, setProcessingProgress] = useState(0);
     const [processingStatus, setProcessingStatus] = useState("");
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [failedStep, setFailedStep] = useState<Step | null>(null);
 
     // Handle ID upload complete
     const handleIDUpload = useCallback(async (imageData: string) => {
@@ -68,27 +71,78 @@ export default function VerifyPage() {
         }
     }, [validationResult]);
 
-    // Handle selfie capture
-    const handleSelfieCapture = useCallback((imageData: string) => {
+    // Handle selfie capture - runs face matching
+    const handleSelfieCapture = useCallback(async (imageData: string) => {
         setSelfieImage(imageData);
         setCurrentStep("matching");
         setStepIndex(3);
+        setProcessingProgress(0);
+        setProcessingStatus("Starting face match...");
 
-        // Simulate face matching (actual implementation would use face-api.js, TensorFlow, tracking.js)
-        // This will be implemented in step 4-6
-        setTimeout(() => {
-            setCurrentStep("success");
-            setStepIndex(4);
-        }, 2000);
-    }, []);
+        // Perform actual face matching using face-api.js
+        if (!idImage) {
+            setErrorMessage("ID image not found");
+            setCurrentStep("error");
+            return;
+        }
 
-    // Handle retry
-    const handleRetry = useCallback(() => {
+        try {
+            const result = await matchFaces(idImage, imageData, (progress, status) => {
+                setProcessingProgress(progress);
+                setProcessingStatus(status);
+            });
+
+            setFaceMatchResult(result);
+
+            if (result.isMatch) {
+                setCurrentStep("success");
+                setStepIndex(4);
+            } else {
+                setErrorMessage(result.error || `Face match failed (${Math.round(result.confidence * 100)}% confidence, need 75%)`);
+                setFailedStep("selfie"); // Track which step failed
+                setCurrentStep("error");
+            }
+        } catch (error) {
+            console.error("Face matching error:", error);
+            setErrorMessage(error instanceof Error ? error.message : "Face matching failed");
+            setFailedStep("selfie");
+            setCurrentStep("error");
+        }
+    }, [idImage]);
+
+    // Retry failed step only (not start over)
+    const handleRetryCurrentStep = useCallback(() => {
+        setErrorMessage(null);
+        setFaceMatchResult(null);
+
+        if (failedStep === "selfie") {
+            // Go back to selfie step, keep ID data
+            setSelfieImage(null);
+            setCurrentStep("selfie");
+            setStepIndex(2);
+        } else if (failedStep === "validation") {
+            // Go back to upload, clear ID data
+            setIdImage(null);
+            setIdData(null);
+            setValidationResult(null);
+            setCurrentStep("upload");
+            setStepIndex(0);
+        } else {
+            // Default: start over
+            handleStartOver();
+        }
+        setFailedStep(null);
+    }, [failedStep]);
+
+    // Start completely over
+    const handleStartOver = useCallback(() => {
         setIdImage(null);
         setIdData(null);
         setValidationResult(null);
         setSelfieImage(null);
+        setFaceMatchResult(null);
         setErrorMessage(null);
+        setFailedStep(null);
         setCurrentStep("upload");
         setStepIndex(0);
     }, []);
@@ -130,7 +184,7 @@ export default function VerifyPage() {
                             result={validationResult}
                             idImage={idImage}
                             onProceed={handleValidationProceed}
-                            onRetry={handleRetry}
+                            onRetry={handleStartOver}
                         />
                     )}
 
@@ -145,26 +199,55 @@ export default function VerifyPage() {
                             </div>
                             <Camera
                                 onCapture={handleSelfieCapture}
-                                onCancel={handleRetry}
+                                onCancel={handleStartOver}
                                 instructions="Look directly at the camera and hold still"
                                 facing="user"
                             />
+
+                            {/* Debug: File upload option */}
+                            <div className="text-center mt-6 pt-6 border-t border-white/10">
+                                <p className="text-white/40 text-xs mb-3">🔧 Debug Mode: Upload a photo instead</p>
+                                <label className="btn-secondary cursor-pointer inline-block">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const reader = new FileReader();
+                                                reader.onload = (ev) => {
+                                                    const data = ev.target?.result as string;
+                                                    if (data) handleSelfieCapture(data);
+                                                };
+                                                reader.readAsDataURL(file);
+                                            }
+                                        }}
+                                    />
+                                    Upload Selfie (Debug)
+                                </label>
+                            </div>
                         </div>
                     )}
 
                     {/* Step: Matching */}
                     {currentStep === "matching" && (
-                        <MatchingView />
+                        <MatchingView progress={processingProgress} status={processingStatus} />
                     )}
 
                     {/* Step: Success */}
                     {currentStep === "success" && (
-                        <SuccessView />
+                        <SuccessView faceMatchConfidence={faceMatchResult?.confidence} />
                     )}
 
                     {/* Step: Error */}
                     {currentStep === "error" && (
-                        <ErrorView message={errorMessage} onRetry={handleRetry} />
+                        <ErrorView
+                            message={errorMessage}
+                            onRetry={handleRetryCurrentStep}
+                            onStartOver={handleStartOver}
+                            faceMatchResult={faceMatchResult}
+                        />
                     )}
                 </div>
             </div>
@@ -362,27 +445,36 @@ function DataRow({ label, value, status }: { label: string; value: string; statu
 
 
 // Matching View Component
-function MatchingView() {
+function MatchingView({ progress, status }: { progress: number; status: string }) {
     return (
         <div className="glass-card p-8 max-w-md mx-auto text-center">
             <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-accent-500/20 flex items-center justify-center">
                 <div className="spinner" />
             </div>
             <h3 className="text-xl font-semibold text-white mb-2">Matching Faces</h3>
-            <p className="text-white/60 mb-4">
-                Comparing your selfie with your ID photo...
-            </p>
+            <p className="text-white/60 mb-4">{status}</p>
+
+            {/* Progress bar */}
+            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden mb-4">
+                <div
+                    className="h-full bg-gradient-to-r from-primary-500 to-accent-500 transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                />
+            </div>
+
             <div className="text-sm text-white/40 space-y-1">
-                <p>✓ face-api.js analysis</p>
-                <p>✓ TensorFlow.js FaceNet</p>
-                <p>✓ tracking.js validation</p>
+                <p className={progress >= 30 ? "text-green-400" : ""}>
+                    {progress >= 30 ? "✓" : "○"} face-api.js analysis
+                </p>
+                <p className="text-white/30">○ TensorFlow.js (coming soon)</p>
+                <p className="text-white/30">○ tracking.js (coming soon)</p>
             </div>
         </div>
     );
 }
 
 // Success View Component
-function SuccessView() {
+function SuccessView({ faceMatchConfidence }: { faceMatchConfidence?: number }) {
     return (
         <div className="max-w-md mx-auto text-center">
             <div className="glass-card p-8">
@@ -393,8 +485,18 @@ function SuccessView() {
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-2">Verification Complete!</h3>
                 <p className="text-white/60 mb-6">
-                    Your age has been verified. You are confirmed to be over 19.
+                    Your age has been verified and your identity confirmed.
                 </p>
+
+                {/* Match confidence */}
+                {typeof faceMatchConfidence === "number" && (
+                    <div className="bg-white/5 rounded-xl p-4 mb-4">
+                        <p className="text-sm text-white/40 mb-1">Face Match Confidence</p>
+                        <p className="text-2xl font-bold text-green-400">
+                            {Math.round(faceMatchConfidence * 100)}%
+                        </p>
+                    </div>
+                )}
 
                 <div className="bg-white/5 rounded-xl p-4 mb-6">
                     <p className="text-sm text-white/40 mb-2">Your credential ID</p>
@@ -419,8 +521,21 @@ function SuccessView() {
     );
 }
 
-// Error View Component
-function ErrorView({ message, onRetry }: { message: string | null; onRetry: () => void }) {
+// Error View Component with Debug Info
+function ErrorView({
+    message,
+    onRetry,
+    onStartOver,
+    faceMatchResult
+}: {
+    message: string | null;
+    onRetry: () => void;
+    onStartOver: () => void;
+    faceMatchResult?: FaceMatchResult | null;
+}) {
+    // Determine if this is a face match failure
+    const isFaceMatchError = message?.includes("confidence") || message?.includes("Face match");
+
     return (
         <div className="glass-card p-8 max-w-md mx-auto text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
@@ -428,11 +543,75 @@ function ErrorView({ message, onRetry }: { message: string | null; onRetry: () =
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
             </div>
-            <h3 className="text-xl font-semibold text-white mb-2">Something Went Wrong</h3>
+
+            <h3 className="text-xl font-semibold text-white mb-2">
+                {isFaceMatchError ? "Face Match Failed" : "Verification Failed"}
+            </h3>
             <p className="text-white/60 mb-6">{message || "An error occurred during verification."}</p>
-            <button onClick={onRetry} className="btn-primary">
-                Try Again
-            </button>
+
+            {/* Debug: Face Match Details */}
+            {faceMatchResult && (
+                <div className="bg-white/5 rounded-xl p-4 mb-6 text-left">
+                    <p className="text-xs text-white/40 mb-3 text-center">🔧 Debug: Face Match Details</p>
+
+                    <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                            <span className="text-white/60">Overall Confidence</span>
+                            <span className={`font-bold ${faceMatchResult.confidence >= 0.75 ? "text-green-400" : faceMatchResult.confidence >= 0.5 ? "text-yellow-400" : "text-red-400"}`}>
+                                {Math.round(faceMatchResult.confidence * 100)}%
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-white/60">Required Threshold</span>
+                            <span className="text-white/80">75%</span>
+                        </div>
+
+                        <div className="border-t border-white/10 my-3 pt-3">
+                            <p className="text-xs text-white/40 mb-2">Model Scores (Weight)</p>
+                        </div>
+
+                        <div className="flex justify-between">
+                            <span className="text-white/60">face-api.js (40%)</span>
+                            <span className={`font-mono ${(faceMatchResult.faceApiScore ?? 0) >= 0.75 ? "text-green-400" : "text-yellow-400"}`}>
+                                {faceMatchResult.faceApiScore !== null
+                                    ? `${Math.round(faceMatchResult.faceApiScore * 100)}%`
+                                    : "N/A"}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-white/60">TensorFlow.js (35%)</span>
+                            <span className="text-white/30 font-mono">
+                                {faceMatchResult.tensorFlowScore !== null
+                                    ? `${Math.round(faceMatchResult.tensorFlowScore * 100)}%`
+                                    : "Not implemented"}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-white/60">tracking.js (25%)</span>
+                            <span className="text-white/30 font-mono">
+                                {faceMatchResult.trackingScore !== null
+                                    ? `${Math.round(faceMatchResult.trackingScore * 100)}%`
+                                    : "Not implemented"}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 text-xs text-white/30">
+                        <p>💡 Tips: Better lighting, face the camera directly, match ID photo angle</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 justify-center">
+                <button onClick={onRetry} className="btn-primary">
+                    Retry This Step
+                </button>
+                <button onClick={onStartOver} className="btn-secondary">
+                    Start Over
+                </button>
+            </div>
         </div>
     );
 }
+

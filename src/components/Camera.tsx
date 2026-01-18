@@ -1,3 +1,27 @@
+/**
+ * Camera Component
+ * ================
+ * 
+ * A reusable camera component for capturing live photos.
+ * Used for selfie capture during age verification.
+ * 
+ * REQUIREMENTS:
+ * - Must be served over HTTPS or localhost (browser security requirement)
+ * - User must grant camera permissions
+ * - Works best in Chrome, Firefox, Edge, Safari
+ * 
+ * PROPS:
+ * - onCapture: Callback with base64 image data when photo is taken
+ * - onCancel: Callback when user cancels
+ * - instructions: Text shown at bottom of viewfinder
+ * - facing: "user" (front camera) or "environment" (back camera)
+ * 
+ * TROUBLESHOOTING:
+ * - If camera fails, check that you're on HTTPS or localhost
+ * - Check browser permissions (lock icon in address bar)
+ * - Try closing other apps that may be using the camera
+ */
+
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
@@ -19,31 +43,106 @@ export default function Camera({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [errorDetails, setErrorDetails] = useState<string | null>(null);
     const [isReady, setIsReady] = useState(false);
     const [countdown, setCountdown] = useState<number | null>(null);
+
+    // Check if we're in a secure context (HTTPS or localhost)
+    const isSecureContext = typeof window !== "undefined" && (
+        window.isSecureContext ||
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+    );
 
     // Start camera
     useEffect(() => {
         async function startCamera() {
+            // Check for secure context
+            if (!isSecureContext) {
+                setError("Camera requires HTTPS");
+                setErrorDetails("Cameras can only be accessed on HTTPS or localhost. Please use https:// or run on localhost:3000");
+                return;
+            }
+
+            // Check if getUserMedia is supported
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setError("Camera not supported");
+                setErrorDetails("Your browser doesn't support camera access. Try Chrome, Firefox, or Edge.");
+                return;
+            }
+
             try {
+                console.log("[Camera] Requesting camera access...");
                 const mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: facing,
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
                     },
                     audio: false,
                 });
 
+                console.log("[Camera] Got media stream:", mediaStream.getVideoTracks()[0]?.label);
+
                 if (videoRef.current) {
                     videoRef.current.srcObject = mediaStream;
-                    await videoRef.current.play();
-                    setStream(mediaStream);
-                    setIsReady(true);
+
+                    // Wait for video to be ready
+                    videoRef.current.onloadedmetadata = () => {
+                        videoRef.current?.play()
+                            .then(() => {
+                                console.log("[Camera] Video playing");
+                                setStream(mediaStream);
+                                setIsReady(true);
+                            })
+                            .catch((playError) => {
+                                console.error("[Camera] Play error:", playError);
+                                setError("Failed to start video");
+                                setErrorDetails(playError.message);
+                            });
+                    };
                 }
             } catch (err) {
-                console.error("Camera error:", err);
-                setError("Unable to access camera. Please grant permission and try again.");
+                console.error("[Camera] Access error:", err);
+
+                const error = err as Error;
+                let message = "Unable to access camera";
+                let details = "";
+
+                if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+                    message = "Camera permission denied";
+                    details = "Click the camera icon in your browser's address bar and allow access, then refresh the page.";
+                } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+                    message = "No camera found";
+                    details = "Make sure you have a camera connected and it's not being used by another application.";
+                } else if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+                    message = "Camera is in use";
+                    details = "Close other apps or browser tabs that might be using the camera.";
+                } else if (error.name === "OverconstrainedError") {
+                    message = "Camera constraints not supported";
+                    details = "Your camera doesn't support the requested resolution. Trying with lower settings.";
+                    // Retry with basic constraints
+                    try {
+                        const basicStream = await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                            audio: false,
+                        });
+                        if (videoRef.current) {
+                            videoRef.current.srcObject = basicStream;
+                            await videoRef.current.play();
+                            setStream(basicStream);
+                            setIsReady(true);
+                            return;
+                        }
+                    } catch {
+                        details = "Camera access failed even with basic settings.";
+                    }
+                } else {
+                    details = error.message || "Unknown error occurred";
+                }
+
+                setError(message);
+                setErrorDetails(details);
             }
         }
 
@@ -54,7 +153,7 @@ export default function Camera({
                 stream.getTracks().forEach((track) => track.stop());
             }
         };
-    }, [facing]);
+    }, [facing, isSecureContext]);
 
     // Capture photo
     const capturePhoto = useCallback(() => {
@@ -105,19 +204,40 @@ export default function Camera({
         onCancel();
     }, [stream, onCancel]);
 
+    // Retry camera access
+    const handleRetry = useCallback(() => {
+        setError(null);
+        setErrorDetails(null);
+        window.location.reload();
+    }, []);
+
     if (error) {
         return (
             <div className="glass-card p-8 text-center max-w-lg mx-auto">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
                     <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Camera Error</h3>
-                <p className="text-white/60 mb-6">{error}</p>
-                <button onClick={handleCancel} className="btn-secondary">
-                    Go Back
-                </button>
+                <h3 className="text-xl font-semibold text-white mb-2">{error}</h3>
+                <p className="text-white/60 mb-6">{errorDetails}</p>
+
+                <div className="flex gap-3 justify-center">
+                    <button onClick={handleCancel} className="btn-secondary">
+                        Go Back
+                    </button>
+                    <button onClick={handleRetry} className="btn-primary">
+                        Retry
+                    </button>
+                </div>
+
+                {/* Debug info */}
+                <div className="mt-6 text-left text-xs text-white/30 bg-white/5 rounded p-3">
+                    <p><strong>Debug Info:</strong></p>
+                    <p>Secure Context: {isSecureContext ? "Yes" : "No"}</p>
+                    <p>Protocol: {typeof window !== "undefined" ? window.location.protocol : "N/A"}</p>
+                    <p>Host: {typeof window !== "undefined" ? window.location.hostname : "N/A"}</p>
+                </div>
             </div>
         );
     }
@@ -136,8 +256,9 @@ export default function Camera({
 
                 {/* Loading state */}
                 {!isReady && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                        <div className="spinner" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+                        <div className="spinner mb-4" />
+                        <p className="text-white/60 text-sm">Starting camera...</p>
                     </div>
                 )}
 

@@ -98,7 +98,7 @@ export default function VerifyPage() {
                 setCurrentStep("success");
                 setStepIndex(4);
             } else {
-                setErrorMessage(result.error || `Face match failed (${Math.round(result.confidence * 100)}% confidence, need 75%)`);
+                setErrorMessage(result.error || "Face match failed - faces don't appear to match");
                 setFailedStep("selfie"); // Track which step failed
                 setCurrentStep("error");
             }
@@ -237,7 +237,7 @@ export default function VerifyPage() {
 
                     {/* Step: Success */}
                     {currentStep === "success" && (
-                        <SuccessView faceMatchConfidence={faceMatchResult?.confidence} />
+                        <SuccessView />
                     )}
 
                     {/* Step: Error */}
@@ -346,7 +346,6 @@ function ValidationView({
             <div className="glass-card p-6 mb-6">
                 <h4 className="text-lg font-semibold text-white mb-4">Extracted Information</h4>
                 <div className="space-y-3">
-                    <DataRow label="OCR Confidence" value={`${Math.min(100, Math.round(data.confidence * 1.15))}%`} status={data.confidence >= 25 ? "success" : "warning"} />
                     <DataRow label="License Number" value={data.idNumber || "Not detected"} status={data.idNumber ? "success" : "warning"} />
                     <DataRow label="Date of Birth" value={result.birthDate || "Not detected"} status={result.birthDate ? "success" : "error"} />
                     <DataRow label="Calculated Age" value={result.age ? `${result.age} years` : "—"} status={result.isOver19 ? "success" : "error"} />
@@ -473,7 +472,7 @@ function MatchingView({ progress, status }: { progress: number; status: string }
 }
 
 // Success View Component
-function SuccessView({ faceMatchConfidence }: { faceMatchConfidence?: number }) {
+function SuccessView() {
     return (
         <div className="max-w-md mx-auto text-center">
             <div className="glass-card p-8">
@@ -486,16 +485,6 @@ function SuccessView({ faceMatchConfidence }: { faceMatchConfidence?: number }) 
                 <p className="text-white/60 mb-6">
                     Your age has been verified and your identity confirmed.
                 </p>
-
-                {/* Match confidence */}
-                {typeof faceMatchConfidence === "number" && (
-                    <div className="bg-white/5 rounded-xl p-4 mb-4">
-                        <p className="text-sm text-white/40 mb-1">Face Match Confidence</p>
-                        <p className="text-2xl font-bold text-green-400">
-                            {Math.round(faceMatchConfidence * 100)}%
-                        </p>
-                    </div>
-                )}
 
                 <div className="bg-white/5 rounded-xl p-4 mb-6">
                     <p className="text-sm text-white/40 mb-2">Your credential ID</p>
@@ -520,12 +509,11 @@ function SuccessView({ faceMatchConfidence }: { faceMatchConfidence?: number }) 
     );
 }
 
-// Error View Component with Debug Info
+// Error View Component
 function ErrorView({
     message,
     onRetry,
     onStartOver,
-    faceMatchResult
 }: {
     message: string | null;
     onRetry: () => void;
@@ -533,7 +521,7 @@ function ErrorView({
     faceMatchResult?: FaceMatchResult | null;
 }) {
     // Determine if this is a face match failure
-    const isFaceMatchError = message?.includes("confidence") || message?.includes("Face match");
+    const isFaceMatchError = message?.includes("Face match");
 
     return (
         <div className="glass-card p-8 max-w-md mx-auto text-center">
@@ -548,38 +536,15 @@ function ErrorView({
             </h3>
             <p className="text-white/60 mb-6">{message || "An error occurred during verification."}</p>
 
-            {/* Debug: Face Match Details */}
-            {faceMatchResult && (
+            {isFaceMatchError && (
                 <div className="bg-white/5 rounded-xl p-4 mb-6 text-left">
-                    <p className="text-xs text-white/40 mb-3 text-center">🔧 Debug: Face Match Details</p>
-
-                    <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                            <span className="text-white/60">Overall Confidence</span>
-                            <span className={`font-bold ${faceMatchResult.confidence >= 0.75 ? "text-green-400" : faceMatchResult.confidence >= 0.5 ? "text-yellow-400" : "text-red-400"}`}>
-                                {Math.round(faceMatchResult.confidence * 100)}%
-                            </span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-white/60">Required Threshold</span>
-                            <span className="text-white/80">75%</span>
-                        </div>
-
-                        <div className="border-t border-white/10 my-3 pt-3">
-                            <p className="text-xs text-white/40 mb-2">Detailed Scores</p>
-                        </div>
-
-                        <div className="flex justify-between">
-                            <span className="text-white/60">face-api.js</span>
-                            <span className={`font-mono ${(faceMatchResult.confidence) >= 0.75 ? "text-green-400" : "text-yellow-400"}`}>
-                                {Math.round(faceMatchResult.confidence * 100)}%
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 text-xs text-white/30">
-                        <p>💡 Tips: Better lighting, face the camera directly, match ID photo angle</p>
-                    </div>
+                    <p className="text-xs text-white/40 mb-2">💡 Tips for better face matching:</p>
+                    <ul className="text-xs text-white/50 space-y-1">
+                        <li>• Ensure good, even lighting on your face</li>
+                        <li>• Face the camera directly</li>
+                        <li>• Match the angle of your ID photo</li>
+                        <li>• Remove glasses if possible</li>
+                    </ul>
                 </div>
             )}
 

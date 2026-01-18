@@ -1,0 +1,51 @@
+// Prisma schema for WebAuthn age verification
+// Database: PostgreSQL (Railway)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  challenges  WebAuthnChallenge[]
+  credentials WebAuthnCredential[]
+}
+
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  userId    String
+  challenge String   @unique
+  type      String   // "registration" or "authentication"
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model WebAuthnCredential {
+  id           String   @id @default(cuid())
+  userId       String
+  credentialId String   @unique // Base64URL-encoded credential ID from authenticator
+  publicKey    Bytes    // COSE public key
+  counter      Int      @default(0)
+  transports   String[] // USB, NFC, BLE, internal, etc.
+  createdAt    DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

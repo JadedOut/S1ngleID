@@ -8,7 +8,6 @@ A privacy-first age verification web application that processes ID documents, pe
 - **Live Face Matching**: Compares your selfie with your ID photo using AI
 - **WebAuthn Credentials**: Creates passkeys (FaceID/TouchID) for future verification
 - **Privacy-First**: Your ID data is immediately deleted after processing
-- **Split Deployment**: Frontend on Vercel, backend with Puppeteer OCR on Railway/Render
 
 ## Prerequisites
 
@@ -23,7 +22,7 @@ A privacy-first age verification web application that processes ID documents, pe
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
+git clone <repo-url>
 cd sduarf
 ```
 
@@ -75,7 +74,7 @@ WEBAUTHN_RP_NAME="AgeVerify"
 # NEXT_PUBLIC_BACKEND_URL="http://localhost:4000"
 ```
 
-**Note:** The credentials are included in this repository for local development. Change them for production deployments.
+**Note:** The credentials are included in this repository for local development.
 
 ### 5. Set Up the Database Schema
 

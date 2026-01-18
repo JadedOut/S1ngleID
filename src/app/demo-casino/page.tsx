@@ -1,0 +1,178 @@
+"use client";
+
+import { useState } from 'react';
+import { verifyAgeWithPasskey, hasAgePasskey } from '@/lib/webauthn-client';
+import { useRouter } from 'next/navigation';
+
+export default function DemoCasinoPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [ageVerified, setAgeVerified] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const handleVerifyAge = async () => {
+    if (!hasAgePasskey()) {
+      setMessage('No passkey found. Redirecting to setup...');
+      setTimeout(() => router.push('/setup-passkey'), 1500);
+      return;
+    }
+
+    setVerifying(true);
+    setMessage('Verifying age with passkey...');
+
+    const result = await verifyAgeWithPasskey();
+
+    if (result.verified) {
+      setMessage('✅ Age verified! Welcome to Lucky777 Casino!');
+      setAgeVerified(true);
+    } else {
+      setMessage(`❌ Verification failed: ${result.error}`);
+    }
+
+    setVerifying(false);
+  };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ageVerified) {
+      setMessage('⚠️ Please verify your age first');
+      return;
+    }
+    setMessage('✅ Logged in successfully! (Demo)');
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-red-900 via-orange-900 to-yellow-900">
+      {/* Casino Header */}
+      <header className="bg-black/30 backdrop-blur-sm border-b border-yellow-500/30 p-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-4xl">🎰</span>
+            <h1 className="text-3xl font-bold text-yellow-400">
+              Lucky777 Casino
+            </h1>
+          </div>
+          <div className="text-yellow-300 text-sm">
+            🔞 21+ Only
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="flex items-center justify-center p-8 min-h-[calc(100vh-80px)]">
+        <div className="max-w-md w-full bg-black/50 backdrop-blur-xl rounded-2xl shadow-2xl border border-yellow-500/30 p-8">
+          {!ageVerified ? (
+            <>
+              <div className="text-center mb-6">
+                <div className="text-6xl mb-4">🔞</div>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Age Verification Required
+                </h2>
+                <p className="text-yellow-300 text-sm">
+                  You must be 21+ to access this casino
+                </p>
+              </div>
+
+              <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 mb-6">
+                <p className="text-red-200 text-sm">
+                  ⚠️ This site requires age verification to comply with gambling regulations.
+                </p>
+              </div>
+
+              <button
+                onClick={handleVerifyAge}
+                disabled={verifying}
+                className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-black py-4 rounded-lg font-bold text-lg hover:from-yellow-600 hover:to-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {verifying ? (
+                  <>🔄 Verifying...</>
+                ) : (
+                  <>🔐 Verify Age with Passkey</>
+                )}
+              </button>
+
+              {message && (
+                <div className={`mt-4 p-3 rounded-lg text-sm ${
+                  message.includes('✅') 
+                    ? 'bg-green-900/50 text-green-200 border border-green-500/30' 
+                    : 'bg-red-900/50 text-red-200 border border-red-500/30'
+                }`}>
+                  {message}
+                </div>
+              )}
+
+              <div className="mt-6 text-center">
+                <p className="text-xs text-gray-400">
+                  Don't have a passkey?{' '}
+                  <button
+                    onClick={() => router.push('/setup-passkey')}
+                    className="text-yellow-400 hover:text-yellow-300 underline"
+                  >
+                    Create one here
+                  </button>
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-center mb-6">
+                <div className="text-6xl mb-4">🎉</div>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Age Verified!
+                </h2>
+                <p className="text-green-300 text-sm">
+                  Welcome to Lucky777 Casino
+                </p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-yellow-300 text-sm font-semibold mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    required
+                    className="w-full px-4 py-3 rounded-lg bg-black/30 border border-yellow-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-yellow-300 text-sm font-semibold mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full px-4 py-3 rounded-lg bg-black/30 border border-yellow-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-lg font-bold hover:from-green-600 hover:to-emerald-600 transition"
+                >
+                  Login & Play
+                </button>
+              </form>
+
+              {message && message.includes('Logged in') && (
+                <div className="mt-4 p-3 rounded-lg bg-green-900/50 text-green-200 border border-green-500/30 text-sm text-center">
+                  {message}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

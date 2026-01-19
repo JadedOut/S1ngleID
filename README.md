@@ -1,6 +1,6 @@
 # S1ngleID - Age Verification App
 
-Created for Uoft Hacks 13 - ![Devpost Here](https://devpost.com/software/oneid-xmt93v)
+Created for Uoft Hacks 13 - [Devpost Here](https://devpost.com/software/oneid-xmt93v)
 
 ![S1ngleID Verification Flow](docs/s1ngleid_hero.png)
 
